@@ -3,7 +3,7 @@
 ln-structure 프로젝트용 정적 검사, 영향 범위, 문서 생성 도구와 Claude Code 훅.
 표준 라이브러리만 사용. Python 3.10+.
 
-ln-structure 규칙: https://github.com/gatesplan/ff_coding_agent_protocol_md
+ln-structure 규칙: `src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`
 
 ## 설치
 
@@ -13,9 +13,21 @@ pip install git+https://github.com/gatesplan/ff-lntools
 
 프로젝트가 쓰는 Python 환경마다 설치한다. 훅이 `python -m lntools` 로 호출하기 때문이다.
 
+## 프로젝트 세팅
+
+```
+lnt init --skill    # 1회. ~/.claude/skills/init-protocol 스킬 설치
+cd my-project
+lnt init            # .claude/ 에 프로토콜 문서 복사, CLAUDE.md 생성, 훅 병합
+```
+
+Claude Code 에서는 `/init-protocol` 이 같은 일을 한다. 코딩 프로토콜 문서의 원본은 이 저장소의
+`src/lntools/protocol/` 이다.
+
 ## 명령
 
 ```
+lnt init [--skill]          # 프로젝트에 코딩 프로토콜 설치
 lnt check [--file PATH]     # C1 방향, C2 표면, C3 층 일치, C4 순환. 위반 시 exit 1
 lnt blast MODULE [-d N]     # MODULE 변경 시 영향받는 상위 모듈. 인터페이스 상속 경유 포함
 lnt map                     # 모듈 목록, 층, 의존

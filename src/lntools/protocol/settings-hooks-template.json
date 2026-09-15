@@ -4,10 +4,7 @@
       {
         "matcher": "startup|resume|clear|compact",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python -m lntools hook session-start"
-          }
+          {"type": "command", "command": "python -m lntools hook session-start"}
         ]
       }
     ],
@@ -15,11 +12,7 @@
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
-          {
-            "type": "command",
-            "command": "python -m lntools hook post-edit",
-            "timeout": 30
-          }
+          {"type": "command", "command": "python -m lntools hook post-edit", "timeout": 30}
         ]
       }
     ]

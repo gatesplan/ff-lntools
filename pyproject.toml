@@ -21,7 +21,7 @@ lnt = "lntools.l4.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lntools = ["**/*.md"]
+lntools = ["**/*.md", "protocol/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

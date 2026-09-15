@@ -2,6 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from lntools.l0.initializer import Initializer
 from lntools.l0.project_layout import ProjectLayout
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
@@ -37,7 +38,18 @@ class Cli:
         h = sub.add_parser("hook", help="Claude Code 훅 진입")
         h.add_argument("event", choices=["post-edit", "session-start"])
 
+        i = sub.add_parser("init", help="프로젝트에 코딩 프로토콜 설치: .claude/ 문서, CLAUDE.md, 훅")
+        i.add_argument("--skill", action="store_true", help="~/.claude/skills/init-protocol 스킬만 설치")
+
         args = p.parse_args(self.argv)
+        if args.cmd == "init":
+            ini = Initializer(Path(args.root).resolve())
+            if args.skill:
+                print(f"스킬 설치: {ini.install_skill()}")
+                return 0
+            for line in ini.run():
+                print(line)
+            return 0
         if args.cmd == "hook":
             # 훅 출력은 Claude Code 가 UTF-8 로 읽는다. 콘솔 로케일과 무관하게 고정
             for stream in (sys.stdin, sys.stdout, sys.stderr):

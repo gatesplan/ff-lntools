@@ -4,6 +4,13 @@
 ## edge
 Edge.counts_for_layer() -> bool
 
+## initializer
+Initializer.__init__(project_root: Path, home: Path | None=None)
+Initializer.run() -> list[str]
+Initializer.merge_hooks() -> str
+Initializer.install_skill() -> Path
+PROTOCOL_FILES  # 정의를 찾지 못함
+
 ## module_ref
 ModuleRef.basename() -> str
 ModuleRef.layer_name() -> str

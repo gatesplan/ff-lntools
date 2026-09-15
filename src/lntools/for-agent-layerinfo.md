@@ -3,6 +3,7 @@
 <!-- lnt:generated:start -->
 ## l0
 - edge: 모듈 간 의존 간선. kind runtime/type_only/inherits, 표면 초과 경로 extra
+- initializer: [설명 필요]
 - module_ref: ln 모듈 하나. 이름, 스코프, 선언 층, 파일 목록, 외부 의존 여부
 - project_layout: 프로젝트 루트와 src/<pkg> 탐색. LAYER_RE
 - raw_import: 해석 전 import 문 하나. target, names, kind, external
