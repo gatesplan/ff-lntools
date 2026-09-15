@@ -18,6 +18,7 @@ class DocGenerator:
         self.layout = layout
         self.graph = graph
         self.sig = SignatureExtractor()
+        self.notices: list[str] = []
 
     # ---- 경로 ----
 
@@ -83,7 +84,9 @@ class DocGenerator:
             return None
         return text.split(START, 1)[1].split(END, 1)[0].strip("\n")
 
-    def _merge(self, existing: str, title: str, block: str) -> str:
+    # 마커가 있으면 그 사이만 교체. 마커가 없는 기존 문서는 제목만 남기고 생성 영역으로 대체한다
+    # (한 줄 설명은 이미 수확했고 나머지는 생성 내용과 중복이므로). 대체 사실은 notices 에 남긴다
+    def _merge(self, existing: str, title: str, block: str, path: Path | None = None) -> str:
         gen = f"{START}\n{block}\n{END}"
         if START in existing and END in existing:
             head, rest = existing.split(START, 1)
@@ -91,16 +94,19 @@ class DocGenerator:
             return f"{head}{gen}{tail}"
         if existing.strip():
             lines = existing.splitlines()
-            if lines and lines[0].startswith("#"):
-                return lines[0] + "\n\n" + gen + "\n\n" + "\n".join(lines[1:]).lstrip("\n") + "\n"
-            return f"# {title}\n\n{gen}\n\n{existing}"
+            heading = lines[0] if lines and lines[0].startswith("#") else f"# {title}"
+            if path is not None:
+                self.notices.append(f"{self.layout.relative(path)}: 마커 없는 기존 문서를 생성 영역으로 대체. 이전 내용은 git 에서 확인")
+            return f"{heading}\n\n{gen}\n\n## Notes\n\n"
         return f"# {title}\n\n{gen}\n\n## Notes\n\n"
 
     def render_layerinfo(self, scope: str) -> str:
-        return self._merge(self._read(self.layerinfo_path(scope)), "for-agent-layerinfo.md", self.layerinfo_block(scope))
+        p = self.layerinfo_path(scope)
+        return self._merge(self._read(p), "for-agent-layerinfo.md", self.layerinfo_block(scope), p)
 
     def render_layerinfo_ln(self, layer_name: str) -> str:
-        return self._merge(self._read(self.layerinfo_ln_path(layer_name)), layer_name.rsplit(".", 1)[-1], self.layerinfo_ln_block(layer_name))
+        p = self.layerinfo_ln_path(layer_name)
+        return self._merge(self._read(p), layer_name.rsplit(".", 1)[-1], self.layerinfo_ln_block(layer_name), p)
 
     def write_all(self) -> list[Path]:
         written: list[Path] = []
@@ -178,6 +184,10 @@ class DocGenerator:
             if recorded.get(f.name) != h:
                 out.append(f"{rel} stale: {f.name} 변경됨. 내용 확인 후 lnt doc --stamp {name}")
         return out
+
+    # moduleinfo 가 있는 모든 모듈에 stamp. 반환: 처리한 경로
+    def stamp_all(self) -> list[Path]:
+        return [self.stamp(n) for n in sorted(self.graph.modules) if self.moduleinfo_path(n).is_file()]
 
     def stamp(self, name: str) -> Path:
         p = self.moduleinfo_path(name)

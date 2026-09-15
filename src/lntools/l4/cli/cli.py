@@ -32,7 +32,7 @@ class Cli:
 
         d = sub.add_parser("doc", help="layerinfo 문서 생성/검사")
         d.add_argument("--check", action="store_true", help="생성 결과와 파일 비교만")
-        d.add_argument("--stamp", metavar="MODULE", help="moduleinfo sources hash 갱신")
+        d.add_argument("--stamp", metavar="MODULE", help="moduleinfo sources hash 갱신. all 이면 문서가 있는 모든 모듈")
 
         m = sub.add_parser("map", help="모듈 목록과 층")
 
@@ -104,6 +104,10 @@ class Cli:
 
         if args.cmd == "doc":
             docs = DocGenerator(layout, graph)
+            if args.stamp == "all":
+                for w in docs.stamp_all():
+                    print(layout.relative(w))
+                return 0
             if args.stamp:
                 if args.stamp not in modules:
                     sys.stderr.write(f"모듈 없음: {args.stamp}\n")
@@ -118,6 +122,8 @@ class Cli:
                 return 1 if bad else 0
             for w in docs.write_all():
                 print(layout.relative(w))
+            for n in docs.notices:
+                print(f"주의: {n}")
             return 0
         return 1
 

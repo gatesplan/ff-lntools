@@ -23,6 +23,7 @@ DocGenerator.write_all() -> list[Path]
 DocGenerator.check(layers: set[str] | None=None) -> list[str]
 DocGenerator.moduleinfo_path(name: str) -> Path
 DocGenerator.stale(name: str) -> list[str]
+DocGenerator.stamp_all() -> list[Path]
 DocGenerator.stamp(name: str) -> Path
 <!-- lnt:generated:end -->
 
