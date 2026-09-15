@@ -1,126 +1,126 @@
 # ff-lntools
 
-AI 코딩 에이전트(Claude Code 등)와 함께 Python 프로젝트를 만들 때 쓰는 구조 규칙 **ln-structure** 와,
-그 규칙을 기계적으로 검사하고 문서를 생성하는 도구 `lnt`.
+English | [한국어](README.ko.md)
 
-표준 라이브러리만 사용. Python 3.10+. Windows / macOS / Linux.
+**ln-structure**, a layout rule for Python projects built with AI coding agents (Claude Code and others),
+and `lnt`, the tool that checks the rule mechanically and generates the navigation docs.
 
-*English summary at the bottom.*
+Standard library only. Python 3.10+. Windows / macOS / Linux.
 
-## 1. ln-structure 란
+## 1. What ln-structure is
 
-모듈을 **의존성 깊이**로만 층(layer)에 배치하는 구조다. 층 이름은 `l0`, `l1`, ... 이고 아무 의미도 없다.
-오직 "무엇에 의존하는가"로 위치가 정해진다.
+Modules are placed into layers named `l0`, `l1`, ... **by dependency depth alone**. Layer names carry no meaning.
+Where a module lives is decided only by what it imports.
 
 ```
 src/shop/
-  l0/                       # 아무것도 의존하지 않음 (표준 라이브러리만)
+  l0/                       # depends on nothing (standard library only)
     candle/
       candle.py             # class Candle
       __init__.py           # from .candle import Candle
       for-agent-moduleinfo.md
-  l1/                       # l0 만 의존
+  l1/                       # depends on l0 only
     order/
       order.py              # class Order  (from shop.l0.candle import Candle)
       __init__.py
-  l2/                       # l0, l1 만 의존
+  l2/                       # depends on l0, l1 only
     report/
       report.py
       __init__.py
-  for-agent-layerinfo.md    # 전체 모듈 목록 (생성됨)
+  for-agent-layerinfo.md    # module map (generated)
 tests/
-  l1/order/test_order.py    # src 와 같은 구조
+  l1/order/test_order.py    # mirrors src
 ```
 
-규칙은 네 개다.
+Four rules.
 
-| 코드 | 규칙 |
+| Code | Rule |
 |---|---|
-| C1 | import 는 **자기보다 낮은 층**만. 같은 층도 금지 |
-| C2 | 모듈 **표면**(`shop.l1.order`)까지만 import. 그 안의 파일이나 중첩 모듈 내부로 들어가지 않음 |
-| C3 | 모듈의 층 = 의존하는 모듈의 최고 층 + 1. 의존이 없으면 l0. 외부 패키지를 쓰면 최소 l1 |
-| C4 | 모듈 간 순환 금지 |
+| C1 | Import only from **lower layers**. Same layer is forbidden too |
+| C2 | Import only the module **surface** (`shop.l1.order`). Never reach into its files or into a nested module's internals |
+| C3 | A module's layer = max(layer of its dependencies) + 1. No dependencies means l0. Any third-party package means at least l1 |
+| C4 | No cycles between modules |
 
-왜 이렇게 하는가.
+Why.
 
-- 에이전트가 만든 코드의 의존성이 얽히는 것을 구조적으로 막는다. 순환이 생길 수 없다
-- 어떤 모듈을 고쳤을 때 영향 범위가 "그보다 위 층"으로 한정된다. 도구가 정확히 계산할 수 있다
-- 층에 의미가 없으므로 "이건 서비스인가 유틸인가" 같은 분류 논쟁이 없다. 의존을 추가하면 층이 올라갈 뿐이다
-- 에이전트가 문서를 3단계 해상도(전체 목록 / 층별 시그니처 / 모듈 상세)로 읽어 필요한 만큼만 탐색한다
+- Dependencies written by agents cannot tangle. Cycles are impossible by construction
+- The blast radius of a change is bounded to "layers above", and a tool can compute it exactly
+- Layers have no semantics, so there is no "is this a service or a util" debate. Add a dependency and the module moves up
+- Agents read three resolutions of docs (module map / per-layer signatures / per-module detail) and explore only as deep as needed
 
-상세 규칙(중첩 모듈, 상호 호출 처리, 의존성 역전, `__init__` 패턴)은
-[`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md).
+Full rules (nested modules, mutual calls, dependency inversion, `__init__` patterns):
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md) (Korean).
 
-## 2. 도구가 하는 일
+## 2. What the tool does
 
-규칙을 사람이 지키는 데 의존하지 않고 도구가 검사한다. 특히 Claude Code 훅으로 연결하면
-에이전트가 파일을 편집할 때마다 자동으로 검사되어 위반이 오류로 돌아온다.
+Enforcement does not rely on people remembering rules. Wired into Claude Code hooks, every edit the agent makes
+is checked and violations come back as errors.
 
-| 명령 | 역할 |
+| Command | Role |
 |---|---|
-| `lnt init` | 프로젝트에 프로토콜 문서, `CLAUDE.md`, Claude Code 훅 설치 |
-| `lnt check` | C1~C4 검사. 위반 시 exit 1 |
-| `lnt blast MODULE` | 이 모듈을 고치면 영향받는 상위 모듈 목록 |
-| `lnt map` | 모듈 목록, 층, 의존 한눈에 |
-| `lnt doc` | 전체 목록과 층별 시그니처 문서 자동 생성 |
-| `lnt doc --check` | 문서가 코드와 어긋났는지 검사 |
-| `lnt move MODULE lK` | 모듈을 다른 층으로 옮기고 import 경로, 테스트, 문서를 전부 갱신 |
+| `lnt init` | Install protocol docs, `CLAUDE.md` and Claude Code hooks into a project |
+| `lnt check` | C1-C4. Exit 1 on violation |
+| `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
+| `lnt map` | Modules, layers, dependencies at a glance |
+| `lnt doc` | Generate the module map and per-layer signature docs |
+| `lnt doc --check` | Exit 1 if docs drifted from code |
+| `lnt move MODULE lK` | Relocate a module and rewrite imports, tests mirror, layer `__init__`, docs |
 
-## 3. 시작하기
+## 3. Getting started
 
-### 설치
+### Install
 
 ```
 pip install ff-lntools
 ```
 
-프로젝트가 쓰는 Python 환경(venv, conda env)마다 설치한다. 훅이 `python -m lntools` 로 호출하기 때문이다.
+Install into every Python environment (venv, conda env) a project uses; the hook calls `python -m lntools`.
 
-### Claude Code 스킬 설치 (1회)
+### Install the Claude Code skill (once)
 
 ```
 lnt init --skill
 ```
 
-`~/.claude/skills/init-protocol/SKILL.md` 가 생긴다. 이후 Claude Code 안에서 `/init-protocol` 을 치면
-아래 `lnt init` 과 같은 일을 한다. Claude Code 를 쓰지 않으면 이 단계는 건너뛴다.
+Writes `~/.claude/skills/init-protocol/SKILL.md`. Inside Claude Code, `/init-protocol` then does the same as
+`lnt init` below. Skip if you do not use Claude Code.
 
-### 프로젝트 세팅
+### Set up a project
 
 ```
 cd my-project
 lnt init
 ```
 
-생기는 것:
+Creates:
 
 ```
 my-project/
-  CLAUDE.md                                   # 없을 때만 생성. 프로토콜 문서를 참조
+  CLAUDE.md                                   # only if absent; references the protocol docs
   .claude/
-    for-agent-codingprotocol-ln-structure.md  # 구조 규칙
-    for-agent-codingprotocol-python.md        # Python 코딩 규칙
-    for-agent-layerinfo-template.md           # 문서 템플릿 3종
+    for-agent-codingprotocol-ln-structure.md  # structure rules
+    for-agent-codingprotocol-python.md        # Python coding rules
+    for-agent-layerinfo-template.md           # three doc templates
     for-agent-layerinfo-ln-template.md
     for-agent-moduleinfo-template.md
-    settings.json                             # Claude Code 훅. 기존 설정이 있으면 hooks 만 병합
+    settings.json                             # Claude Code hooks; only "hooks" is merged if the file exists
 ```
 
-### 코드 작성과 검사
+### Write code, check it
 
-`src/<패키지>/l0/`, `l1/` ... 아래에 모듈 폴더를 만든다. 모듈 하나 = 폴더 하나 = 파일 하나(원칙) = 클래스 하나.
+Create module folders under `src/<package>/l0/`, `l1/`, ... One module = one folder = one file (by default) = one class.
 
 ```
-lnt check          # 규칙 검사
-lnt doc            # 문서 생성
-lnt map            # 구조 확인
+lnt check          # rules
+lnt doc            # docs
+lnt map            # overview
 ```
 
-`lnt check` 가 C3 위반("선언 l2, 계산 l1")을 내면 `lnt move 모듈 l1` 로 옮긴다.
+When `lnt check` reports C3 ("declared l2, computed l1"), run `lnt move <module> l1`.
 
-## 4. Claude Code 훅 동작
+## 4. How the Claude Code hooks work
 
-`lnt init` 이 `.claude/settings.json` 에 훅 두 개를 등록한다.
+`lnt init` registers two hooks in `.claude/settings.json`.
 
 ```json
 {
@@ -137,23 +137,23 @@ lnt map            # 구조 확인
 }
 ```
 
-- **SessionStart**: 세션이 시작될 때 `for-agent-layerinfo.md`(전체 모듈 목록)를 에이전트 컨텍스트에 넣는다.
-  에이전트가 grep 부터 시작하지 않고 구조를 알고 시작한다
-- **PostToolUse**: 에이전트가 `src/**/*.py` 를 편집할 때마다 실행된다
-  - 규칙 위반이 있으면 **exit 2 + stderr**. 에이전트에게 오류로 전달되어 고치기 전에는 진행하지 못한다
-  - 위반이 없으면 영향 범위(`blast`)와 문서 stale 여부를 정보로 전달한다
+- **SessionStart**: injects `for-agent-layerinfo.md` (the module map) into the agent's context, so it starts
+  oriented instead of grepping
+- **PostToolUse**: runs after every edit to `src/**/*.py`
+  - Violations: **exit 2 + stderr**. The agent receives an error and cannot proceed until fixed
+  - No violations: the blast radius and doc staleness are returned as context
 
-훅은 에이전트가 호출하는 것이 아니라 Claude Code 가 자동으로 실행한다. 에이전트가 "규칙을 잊어도" 검사된다.
+Hooks are executed by Claude Code itself, not by the agent. The check happens even if the agent "forgets" the rules.
 
-## 5. 문서 체계
+## 5. Docs
 
-| 파일 | 위치 | 내용 | 누가 쓰나 |
+| File | Where | Content | Written by |
 |---|---|---|---|
-| `for-agent-layerinfo.md` | 패키지 루트 | 층별 모듈 목록과 한 줄 설명 | 목록은 `lnt doc`, 설명은 사람 |
-| `for-agent-layerinfo-lN.md` | 각 층 | 공개 클래스의 메서드 시그니처와 정의 파일 | `lnt doc` |
-| `for-agent-moduleinfo.md` | 각 모듈 | 동작, 예외, 설계 이유 | 사람. `sources` 헤더의 hash 로 stale 판정 |
+| `for-agent-layerinfo.md` | package root | modules per layer with a one-line description | list by `lnt doc`, descriptions by people |
+| `for-agent-layerinfo-lN.md` | each layer | public class method signatures and defining file | `lnt doc` |
+| `for-agent-moduleinfo.md` | each module | behavior, exceptions, design rationale | people; staleness detected via `sources` hashes |
 
-생성 문서는 `<!-- lnt:generated:start -->` 와 `end` 마커 사이만 도구가 쓴다. 마커 밖은 자유롭게 써도 보존된다.
+The tool writes only between `<!-- lnt:generated:start -->` and `end` markers. Anything outside is preserved.
 
 ```
 ## order
@@ -161,53 +161,31 @@ Order.__init__(symbol: str, qty: float)  # order.py
 Order.fill(qty: float) -> None  # order.py
 ```
 
-## 6. 자주 나오는 질문
+## 6. FAQ
 
-**하위 모듈이 상위 모듈을 써야 하는데?**
-층을 올리면 된다. 안 올라가는 경우(양방향 호출, 플러그인, 패키지 밖 코드)만 의존성 역전을 쓴다.
-규칙 문서의 "상위 층 호출이 필요할 때" 절.
+**A lower module needs a higher one.**
+Move it up. Use dependency inversion only when moving cannot work (mutual calls, plugins, code outside the package).
+See the rules doc, section on calling upward.
 
-**두 클래스가 서로 호출하는데?**
-동작 단위가 하나라면 같은 모듈 폴더에 두 파일로 둔다. 모듈 내부 순환은 규칙 밖이다.
+**Two classes call each other.**
+If they are one unit of behavior, keep them as two files in one module folder. Cycles inside a module are out of scope.
 
-**층이 많아지면?**
-중첩 모듈을 쓴다. `l3/portfolio/` 안에 다시 `l0/`, `l1/` 을 둘 수 있다. 바깥에서는 `portfolio` 표면만 보인다.
+**Too many layers.**
+Nest. `l3/portfolio/` can contain its own `l0/`, `l1/`. From outside only the `portfolio` surface is visible.
 
-**기존 프로젝트에 적용하면?**
-`lnt init` 후 `lnt check`. 위반이 나오면 `lnt move` 로 하나씩 옮긴다. 이미 손으로 쓴 layerinfo 문서가 있으면
-`lnt doc` 이 한 줄 설명을 살리고 나머지를 생성 영역으로 바꾼다(이전 내용은 git 에 있다).
+**Applying to an existing project.**
+`lnt init`, then `lnt check`. Fix violations one at a time with `lnt move`. If hand-written layerinfo docs exist,
+`lnt doc` keeps the one-line descriptions and replaces the rest with the generated block (the old text is in git).
 
-## 7. 개발
+## 7. Development
 
 ```
 git clone https://github.com/gatesplan/ff-lntools
 cd ff-lntools
 pip install -e .[dev]
 python -m pytest -q
-python -m lntools check       # 이 프로젝트 자체가 ln-structure 이며 자기 자신을 검사한다
+python -m lntools check       # this project is itself ln-structure and checks itself
 ```
 
-연구 프로토콜(실험 폴더, 논문 노트)은 별도 저장소
+Research protocols (experiment folders, paper notes) live in a separate repository:
 [ff_coding_agent_protocol_md](https://github.com/gatesplan/ff_coding_agent_protocol_md).
-
----
-
-## English summary
-
-**ln-structure** places Python modules into layers `l0`, `l1`, ... strictly by dependency depth.
-A module may import only lower layers, only through the module surface (`pkg.l1.order`), and its layer
-must equal max(dependency layer) + 1. Cycles are impossible by construction. Layer names carry no meaning.
-
-**lnt** enforces this with the standard library only:
-
-```
-pip install ff-lntools
-lnt init            # protocol docs, CLAUDE.md, Claude Code hooks into the project
-lnt check           # C1 direction, C2 surface, C3 layer, C4 cycles
-lnt blast MODULE    # dependents, including consumers through inherited interfaces
-lnt doc             # generate module list and per-layer signature docs
-lnt move MODULE lK  # relocate a module and rewrite imports, tests, docs
-```
-
-With Claude Code, a PostToolUse hook runs `lnt check` on every edit: violations come back to the agent
-as errors (exit 2), and the blast radius comes back as context. A SessionStart hook injects the module map.
