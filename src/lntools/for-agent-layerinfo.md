@@ -5,6 +5,7 @@
 - edge: 모듈 간 의존 간선. kind runtime/type_only/inherits, 표면 초과 경로 extra
 - module_ref: ln 모듈 하나. 이름, 스코프, 선언 층, 파일 목록, 외부 의존 여부
 - project_layout: 프로젝트 루트와 src/<pkg> 탐색. LAYER_RE
+- raw_import: 해석 전 import 문 하나. target, names, kind, external
 - signature_extractor: 모듈 __init__ 공개 이름과 클래스 메서드 시그니처를 ast 로 추출
 - violation: 규칙 위반 C1~C4 레코드와 포맷
 

@@ -6,6 +6,7 @@ _EXPORTS = {
     "LAYER_RE": "project_layout",
     "ModuleRef": "module_ref",
     "ProjectLayout": "project_layout",
+    "RawImport": "raw_import",
     "SignatureExtractor": "signature_extractor",
     "Violation": "violation",
 }

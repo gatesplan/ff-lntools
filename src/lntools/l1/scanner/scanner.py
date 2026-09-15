@@ -1,26 +1,11 @@
 import ast
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 
 from lntools.l0.edge import Edge
 from lntools.l0.module_ref import ModuleRef
 from lntools.l0.project_layout import LAYER_RE, ProjectLayout
-
-
-# 파일 하나에서 뽑은 import 문 하나. target은 패키지명을 포함한 절대 점 경로
-@dataclass
-class _RawImport:
-    target: str | None       # None: 패키지 밖(표준 라이브러리 또는 외부) 또는 해석 불가
-    names: list[str]
-    kind: str                # runtime | type_only | inherits
-    line: int
-    external: bool = False   # 표준 라이브러리가 아닌 외부 패키지
-
-
-@dataclass
-class _FileParse:
-    imports: list[_RawImport] = field(default_factory=list)
+from lntools.l0.raw_import import RawImport
 
 
 # src/<pkg>/ 를 훑어 모듈 목록과 의존 간선을 만든다
@@ -35,7 +20,7 @@ class Scanner:
 
     def scan(self) -> tuple[dict[str, ModuleRef], list[Edge]]:
         self._discover(self.layout.package_root, "")
-        parsed: dict[Path, _FileParse] = {}
+        parsed: dict[Path, list[RawImport]] = {}
         for m in self.modules.values():
             for f in m.files:
                 if f not in parsed:
@@ -43,7 +28,7 @@ class Scanner:
         # 파일은 자기를 포함하는 모든 모듈(외곽 중첩 모듈 포함)에 대해 각각 해석된다
         for m in sorted(self.modules.values(), key=lambda x: x.name):
             for f in m.files:
-                for raw in parsed[f].imports:
+                for raw in parsed[f]:
                     self._resolve(m, f, raw)
         return self.modules, self.edges
 
@@ -89,14 +74,14 @@ class Scanner:
                             out[str(k.value)] = str(v.value)
         return out
 
-    def _parse(self, file: Path) -> _FileParse:
-        fp = _FileParse()
+    def _parse(self, file: Path) -> list[RawImport]:
+        out: list[RawImport] = []
         try:
             tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
         except SyntaxError:
-            return fp
+            return out
         local_names: dict[str, str] = {}   # 로컬 이름 -> 절대 target (상속 간선 해석용)
-        self._walk(tree, file, False, fp, local_names)
+        self._walk(tree, file, False, out, local_names)
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -105,25 +90,25 @@ class Scanner:
                 while isinstance(root, ast.Attribute):
                     root = root.value
                 if isinstance(root, ast.Name) and root.id in local_names:
-                    fp.imports.append(_RawImport(local_names[root.id], [], "inherits", node.lineno))
-        return fp
+                    out.append(RawImport(local_names[root.id], [], "inherits", node.lineno))
+        return out
 
-    def _walk(self, node: ast.AST, file: Path, in_tc: bool, fp: _FileParse, local_names: dict[str, str]) -> None:
+    def _walk(self, node: ast.AST, file: Path, in_tc: bool, out: list[RawImport], local_names: dict[str, str]) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.If) and self._is_type_checking(child.test):
                 for b in child.body:
-                    self._walk_one(b, file, True, fp, local_names)
+                    self._walk_one(b, file, True, out, local_names)
                 for b in child.orelse:
-                    self._walk_one(b, file, in_tc, fp, local_names)
+                    self._walk_one(b, file, in_tc, out, local_names)
             else:
-                self._walk_one(child, file, in_tc, fp, local_names)
+                self._walk_one(child, file, in_tc, out, local_names)
 
-    def _walk_one(self, node: ast.AST, file: Path, in_tc: bool, fp: _FileParse, local_names: dict[str, str]) -> None:
+    def _walk_one(self, node: ast.AST, file: Path, in_tc: bool, out: list[RawImport], local_names: dict[str, str]) -> None:
         kind = "type_only" if in_tc else "runtime"
         if isinstance(node, ast.Import):
             for a in node.names:
                 raw = self._absolute(a.name, file, node.lineno, [], kind)
-                fp.imports.append(raw)
+                out.append(raw)
                 if raw.target:
                     local_names[(a.asname or a.name).split(".")[0]] = raw.target
         elif isinstance(node, ast.ImportFrom):
@@ -132,12 +117,12 @@ class Scanner:
                 raw = self._absolute(node.module or "", file, node.lineno, names, kind)
             else:
                 raw = self._relative(node.level, node.module, file, node.lineno, names, kind)
-            fp.imports.append(raw)
+            out.append(raw)
             if raw.target:
                 for a in node.names:
                     local_names[a.asname or a.name] = raw.target
         else:
-            self._walk(node, file, in_tc, fp, local_names)
+            self._walk(node, file, in_tc, out, local_names)
 
     @staticmethod
     def _is_type_checking(test: ast.AST) -> bool:
@@ -147,27 +132,27 @@ class Scanner:
             return test.attr == "TYPE_CHECKING"
         return False
 
-    def _absolute(self, dotted: str, file: Path, line: int, names: list[str], kind: str) -> _RawImport:
+    def _absolute(self, dotted: str, file: Path, line: int, names: list[str], kind: str) -> RawImport:
         top = dotted.split(".")[0]
         if top == self.pkg:
-            return _RawImport(dotted, names, kind, line)
+            return RawImport(dotted, names, kind, line)
         external = top not in self._stdlib and top != ""
-        return _RawImport(None, names, kind, line, external=external)
+        return RawImport(None, names, kind, line, external=external)
 
     # 상대 import 를 Python 의미 그대로 절대 경로로 바꾼다. 파일의 패키지 = 파일이 든 디렉토리
-    def _relative(self, level: int, module: str | None, file: Path, line: int, names: list[str], kind: str) -> _RawImport:
+    def _relative(self, level: int, module: str | None, file: Path, line: int, names: list[str], kind: str) -> RawImport:
         rel_dir = file.parent.relative_to(self.layout.package_root)
         parts = [self.pkg, *rel_dir.parts]
         up = level - 1
         if up > len(parts) - 1:
-            return _RawImport(None, names, kind, line)
+            return RawImport(None, names, kind, line)
         base = parts[: len(parts) - up]
         if module:
             base = base + module.split(".")
-        return _RawImport(".".join(base), names, kind, line)
+        return RawImport(".".join(base), names, kind, line)
 
     # 모듈 m 의 관점에서 raw import 를 간선으로 바꾼다
-    def _resolve(self, m: ModuleRef, file: Path, raw: _RawImport) -> None:
+    def _resolve(self, m: ModuleRef, file: Path, raw: RawImport) -> None:
         if raw.target is None:
             if raw.external and raw.kind == "runtime":
                 m.has_external = True

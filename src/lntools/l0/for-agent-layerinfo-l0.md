@@ -18,6 +18,9 @@ ProjectLayout.find(start: Path) -> 'ProjectLayout | None'
 ProjectLayout.relative(path: Path) -> str
 LAYER_RE  # 정의를 찾지 못함
 
+## raw_import
+RawImport  # 공개 메서드 없음
+
 ## signature_extractor
 SignatureExtractor.exports_of(module_dir: Path) -> list[str]
 SignatureExtractor.extract(module_dir: Path, exported: list[str]) -> list[str]
