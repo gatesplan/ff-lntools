@@ -8,7 +8,7 @@ ln-structure 규칙: `src/lntools/protocol/for-agent-codingprotocol-ln-structure
 ## 설치
 
 ```
-pip install git+https://github.com/gatesplan/ff-lntools
+pip install ff-lntools
 ```
 
 프로젝트가 쓰는 Python 환경마다 설치한다. 훅이 `python -m lntools` 로 호출하기 때문이다.

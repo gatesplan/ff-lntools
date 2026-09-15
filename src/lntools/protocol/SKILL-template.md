@@ -15,7 +15,7 @@ user-invocable: true
 if ! python -c "import lntools" 2>/dev/null; then
     if [ "${CONDA_DEFAULT_ENV:-}" = "base" ] || [ -z "${CONDA_DEFAULT_ENV:-}${VIRTUAL_ENV:-}" ]; then
         echo "lntools 없음. 활성 env 가 없거나 base 라 설치하지 않음."
-        echo "프로젝트 env 활성화 후: pip install git+https://github.com/gatesplan/ff-lntools"
+        echo "프로젝트 env 활성화 후: pip install ff-lntools"
         exit 1
     fi
     echo "lntools 설치: $(python -c 'import sys; print(sys.executable)')"
