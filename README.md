@@ -11,8 +11,7 @@ ln-structure 규칙: https://github.com/gatesplan/ff_coding_agent_protocol_md
 pip install git+https://github.com/gatesplan/ff-lntools
 ```
 
-개발용은 `pip install -e .`. 프로젝트가 쓰는 Python 환경마다 설치한다. 훅이 `python -m lntools` 로 호출하기 때문이다.
-`init-protocol` 스킬이 활성 env 에 없으면 자동으로 설치한다.
+프로젝트가 쓰는 Python 환경마다 설치한다. 훅이 `python -m lntools` 로 호출하기 때문이다.
 
 ## 명령
 
