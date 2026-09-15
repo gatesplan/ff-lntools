@@ -3,7 +3,7 @@
 <!-- lnt:generated:start -->
 ## l0
 - edge: 모듈 간 의존 간선. kind runtime/type_only/inherits, 표면 초과 경로 extra
-- initializer: [설명 필요]
+- initializer: lnt init. 프로토콜 문서 복사, CLAUDE.md, 훅 병합, 스킬 설치
 - module_ref: ln 모듈 하나. 이름, 스코프, 선언 층, 파일 목록, 외부 의존 여부
 - project_layout: 프로젝트 루트와 src/<pkg> 탐색. LAYER_RE
 - raw_import: 해석 전 import 문 하나. target, names, kind, external
@@ -12,6 +12,7 @@
 
 ## l1
 - graph: 모듈 그래프. 계산 층, 역의존, 인터페이스 경유 blast, 순환 탐지
+- layer_init_writer: 층 __init__.py 를 PEP 562 지연 re-export 형태로 생성
 - scanner: src/<pkg> 를 훑어 모듈과 간선 생성. 상대/절대/층 단위 import 해석, TYPE_CHECKING 구분
 
 ## l2
@@ -21,6 +22,7 @@
 
 ## l3
 - hook_runner: Claude Code 훅 진입. stdin JSON 해석, exit 2 / additionalContext 채널 선택
+- mover: lnt move. 모듈 층 이동, import 재작성, tests 미러, 층 __init__ 와 문서 재생성
 
 ## l4
 - cli: lnt 명령줄. check, blast, map, doc, hook

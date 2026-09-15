@@ -34,6 +34,8 @@ lnt map                     # 모듈 목록, 층, 의존
 lnt doc                     # for-agent-layerinfo.md, for-agent-layerinfo-lN.md 생성
 lnt doc --check             # 생성 결과와 파일 비교. 다르면 exit 1
 lnt doc --stamp MODULE      # for-agent-moduleinfo.md 의 sources hash 갱신
+lnt move MODULE lK          # 모듈을 lK 로 이동. 패키지/tests 의 import 재작성, tests 미러 이동,
+                            # 두 층의 __init__ 을 지연 re-export 로 재생성, 문서 재생성
 lnt hook post-edit          # Claude Code PostToolUse 훅 진입 (stdin JSON)
 lnt hook session-start      # Claude Code SessionStart 훅 진입
 ```

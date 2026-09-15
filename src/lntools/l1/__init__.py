@@ -2,6 +2,7 @@ import importlib
 
 _EXPORTS = {
     "Graph": "graph",
+    "LayerInitWriter": "layer_init_writer",
     "Scanner": "scanner",
 }
 __all__ = list(_EXPORTS)

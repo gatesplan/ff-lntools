@@ -2,6 +2,7 @@ import importlib
 
 _EXPORTS = {
     "HookRunner": "hook_runner",
+    "Mover": "mover",
 }
 __all__ = list(_EXPORTS)
 

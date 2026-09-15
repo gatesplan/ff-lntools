@@ -10,6 +10,7 @@ from lntools.l2.blaster import Blaster
 from lntools.l2.checker import Checker
 from lntools.l2.doc_generator import DocGenerator
 from lntools.l3.hook_runner import HookRunner
+from lntools.l3.mover import Mover
 
 
 # lnt 명령줄 진입점
@@ -34,6 +35,10 @@ class Cli:
         d.add_argument("--stamp", metavar="MODULE", help="moduleinfo sources hash 갱신")
 
         m = sub.add_parser("map", help="모듈 목록과 층")
+
+        mv = sub.add_parser("move", help="모듈을 다른 층으로 이동. import, tests 미러, 층 __init__, 문서 갱신")
+        mv.add_argument("module")
+        mv.add_argument("layer", help="예: l2")
 
         h = sub.add_parser("hook", help="Claude Code 훅 진입")
         h.add_argument("event", choices=["post-edit", "session-start"])
@@ -78,6 +83,15 @@ class Cli:
 
         if args.cmd == "blast":
             print(Blaster(graph).report(args.module, args.depth))
+            return 0
+
+        if args.cmd == "move":
+            try:
+                for line in Mover(layout, graph).move(args.module, args.layer):
+                    print(line)
+            except ValueError as e:
+                sys.stderr.write(f"{e}\n")
+                return 1
             return 0
 
         if args.cmd == "map":

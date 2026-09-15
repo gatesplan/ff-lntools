@@ -11,6 +11,11 @@ Graph.computed_layer(name: str) -> int
 Graph.blast(name: str, depth: int=1) -> list[tuple[str, str]]
 Graph.cycles() -> list[list[str]]
 
+## layer_init_writer
+LayerInitWriter.__init__()
+LayerInitWriter.render(modules: list[ModuleRef]) -> str
+LayerInitWriter.write(layer_dir: Path, modules: list[ModuleRef]) -> Path
+
 ## scanner
 Scanner.__init__(layout: ProjectLayout)
 Scanner.scan() -> tuple[dict[str, ModuleRef], list[Edge]]
