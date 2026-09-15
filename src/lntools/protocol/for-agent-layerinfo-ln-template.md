@@ -22,13 +22,13 @@ src/fishfactory/
 
 <!-- lnt:generated:start -->
 ## modulename
-ClassName.__init__(args) -> None
-ClassName.method_name(args) -> return_type
-ClassName.another_method(args) -> return_type
+ClassName.__init__(args) -> None  # modulename.py
+ClassName.method_name(args) -> return_type  # modulename.py
+ClassName.another_method(args) -> return_type  # modulename.py
 
 ## another_module
-ClassName.__init__(args) -> None
-ClassName.method_name(args) -> return_type
+ClassName.__init__(args) -> None  # another_module.py
+ClassName.method_name(args) -> return_type  # another_module.py
 <!-- lnt:generated:end -->
 
 ## Notes
@@ -41,6 +41,7 @@ ClassName.method_name(args) -> return_type
 - 시그니처만 작성 (설명 없음)
 - 한 줄에 하나씩
 - `ClassName.method_name()` 형식
+- 줄 끝 `# 파일` 은 정의가 있는 파일 (모듈 디렉토리 기준). 중첩 모듈은 `l1/store/store.py` 처럼 경로
 - 함수명이 자기설명적이어야 함
 - `lnt doc --check`가 생성 결과와 파일을 비교해 다르면 exit 1
 
@@ -50,31 +51,31 @@ ClassName.method_name(args) -> return_type
 # l1
 
 ## order
-Order.__init__(symbol: str, side: str, price: float, quantity: float)
-Order.fill(quantity: float) -> Trade
-Order.cancel() -> None
-Order.get_unfilled() -> float
-Order.is_filled() -> bool
+Order.__init__(symbol: str, side: str, price: float, quantity: float)  # order.py
+Order.fill(quantity: float) -> Trade  # order.py
+Order.cancel() -> None  # order.py
+Order.get_unfilled() -> float  # order.py
+Order.is_filled() -> bool  # order.py
 
 ## pair
-Pair.__init__(token: Token, value: float)
-Pair.merge(other: Pair) -> Pair
-Pair.split(ratio: float) -> tuple[Pair, Pair]
-Pair.get_average_price() -> float
+Pair.__init__(token: Token, value: float)  # pair.py
+Pair.merge(other: Pair) -> Pair  # pair.py
+Pair.split(ratio: float) -> tuple[Pair, Pair]  # pair.py
+Pair.get_average_price() -> float  # pair.py
 
 ## market
-Market.__init__(candles: list[Candle])
-Market.get_at(timestamp: int) -> Candle
-Market.get_range(start: int, end: int) -> list[Candle]
-Market.to_dataframe() -> DataFrame
+Market.__init__(candles: list[Candle])  # market.py
+Market.get_at(timestamp: int) -> Candle  # market.py
+Market.get_range(start: int, end: int) -> list[Candle]  # market.py
+Market.to_dataframe() -> DataFrame  # market.py
 
 ## order_book
-OrderBook.__init__(symbol: str)
-OrderBook.add_bid(price: float, quantity: float) -> None
-OrderBook.add_ask(price: float, quantity: float) -> None
-OrderBook.get_best_bid() -> float | None
-OrderBook.get_best_ask() -> float | None
-OrderBook.match_order(side: str, quantity: float) -> list[tuple[float, float]]
+OrderBook.__init__(symbol: str)  # order_book.py
+OrderBook.add_bid(price: float, quantity: float) -> None  # order_book.py
+OrderBook.add_ask(price: float, quantity: float) -> None  # order_book.py
+OrderBook.get_best_bid() -> float | None  # order_book.py
+OrderBook.get_best_ask() -> float | None  # order_book.py
+OrderBook.match_order(side: str, quantity: float) -> list[tuple[float, float]]  # order_book.py
 ```
 
 ## 3단계 해상도 구조

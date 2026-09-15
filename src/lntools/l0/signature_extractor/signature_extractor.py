@@ -21,22 +21,24 @@ class SignatureExtractor:
         return names
 
     # 공개 이름 각각의 시그니처 줄. 클래스는 Class.method(...) -> ret, 함수는 name(...) -> ret
+    # 각 줄 끝에 정의가 있는 파일을 모듈 디렉토리 기준으로 붙인다
     def extract(self, module_dir: Path, exported: list[str]) -> list[str]:
         defs = self._collect_defs(module_dir)
         lines: list[str] = []
         for name in exported:
-            node = defs.get(name)
-            if node is None:
+            found = defs.get(name)
+            if found is None:
                 lines.append(f"{name}  # 정의를 찾지 못함")
                 continue
+            node, rel = found
             if isinstance(node, ast.ClassDef):
-                lines.extend(self._class_lines(node))
+                lines.extend(self._class_lines(node, rel))
             else:
-                lines.append(self._func_line(node, prefix="", drop_self=False))
+                lines.append(self._func_line(node, prefix="", drop_self=False, rel=rel))
         return lines
 
-    def _collect_defs(self, module_dir: Path) -> dict[str, ast.AST]:
-        defs: dict[str, ast.AST] = {}
+    def _collect_defs(self, module_dir: Path) -> dict[str, tuple[ast.AST, str]]:
+        defs: dict[str, tuple[ast.AST, str]] = {}
         for f in sorted(module_dir.rglob("*.py")):
             if f.name == "__init__.py":
                 continue
@@ -44,24 +46,25 @@ class SignatureExtractor:
                 tree = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
             except SyntaxError:
                 continue
+            rel = f.relative_to(module_dir).as_posix()
             for node in tree.body:
                 if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                    defs.setdefault(node.name, node)
+                    defs.setdefault(node.name, (node, rel))
         return defs
 
-    def _class_lines(self, cls: ast.ClassDef) -> list[str]:
+    def _class_lines(self, cls: ast.ClassDef, rel: str) -> list[str]:
         out: list[str] = []
         for node in cls.body:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             if node.name.startswith("_") and node.name != "__init__":
                 continue
-            out.append(self._func_line(node, prefix=cls.name + ".", drop_self=True))
+            out.append(self._func_line(node, prefix=cls.name + ".", drop_self=True, rel=rel))
         if not out:
-            out.append(f"{cls.name}  # 공개 메서드 없음")
+            out.append(f"{cls.name}  # {rel} (공개 메서드 없음)")
         return out
 
-    def _func_line(self, fn: ast.AST, prefix: str, drop_self: bool) -> str:
+    def _func_line(self, fn: ast.AST, prefix: str, drop_self: bool, rel: str = "") -> str:
         args = ast.unparse(fn.args)
         if drop_self:
             if args == "self" or args == "cls":
@@ -71,4 +74,5 @@ class SignatureExtractor:
             elif args.startswith("cls, "):
                 args = args[5:]
         ret = f" -> {ast.unparse(fn.returns)}" if fn.returns is not None else ""
-        return f"{prefix}{fn.name}({args}){ret}"
+        where = f"  # {rel}" if rel else ""
+        return f"{prefix}{fn.name}({args}){ret}{where}"

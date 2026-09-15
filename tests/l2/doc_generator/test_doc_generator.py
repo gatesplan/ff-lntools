@@ -9,8 +9,13 @@ def test_layerinfo_ln_signatures(layout: ProjectLayout, graph: Graph):
     block = DocGenerator(layout, graph).layerinfo_ln_block("l1")
     assert "## order" in block
     assert "Order.__init__(symbol: str, qty: float)" in block
-    assert "Order.fill(qty: float) -> None" in block
+    assert "Order.fill(qty: float) -> None  # order.py" in block
     assert "_internal" not in block
+
+
+def test_nested_module_signature_shows_relative_file(layout: ProjectLayout, graph: Graph):
+    block = DocGenerator(layout, graph).layerinfo_ln_block("l3")
+    assert "Store.put(snap: TickSnapshot, order: Order) -> None  # l1/store/store.py" in block
 
 
 def test_write_then_check_is_clean(layout: ProjectLayout, graph: Graph):
