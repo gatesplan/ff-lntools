@@ -19,7 +19,7 @@ if ! python -c "import lntools" 2>/dev/null; then
         exit 1
     fi
     echo "lntools 설치: $(python -c 'import sys; print(sys.executable)')"
-    python -m pip install -q git+https://github.com/gatesplan/ff-lntools
+    python -m pip install -q ff-lntools
 fi
 python -m lntools init
 ```
