@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ff-lntools"
+version = "0.1.0"
+description = "ln-structure checker, blast radius, doc generator and Claude Code hooks"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+lnt = "lntools.l4.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lntools = ["**/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
