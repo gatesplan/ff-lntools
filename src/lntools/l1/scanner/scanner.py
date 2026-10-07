@@ -4,7 +4,7 @@ from pathlib import Path
 
 from lntools.l0.edge import Edge
 from lntools.l0.module_ref import ModuleRef
-from lntools.l0.project_layout import LAYER_RE, ProjectLayout
+from lntools.l0.project_layout import ProjectLayout
 from lntools.l0.raw_import import RawImport
 from lntools.l0.signature_extractor import SignatureExtractor
 
@@ -36,7 +36,7 @@ class Scanner:
     # 스코프 디렉토리에서 lN/모듈 을 찾고, 중첩 모듈은 재귀
     def _discover(self, scope_dir: Path, scope_name: str) -> None:
         for layer_dir in sorted(scope_dir.iterdir()):
-            mt = LAYER_RE.match(layer_dir.name)
+            mt = ProjectLayout.LAYER_RE.match(layer_dir.name)
             if not (layer_dir.is_dir() and mt):
                 continue
             n = int(mt.group(1))
@@ -150,20 +150,21 @@ class Scanner:
             if best.name == m.name:
                 return   # 자기 모듈 내부
             extra = rel[len(best.name):].lstrip(".")
-            self.edges.append(Edge(m.name, best.name, best.layer, raw.kind, file, raw.line, rel, extra))
+            names = [] if extra or raw.kind == "inherits" else list(raw.names)
+            self.edges.append(Edge(m.name, best.name, best.layer, raw.kind, file, raw.line, rel, extra, names))
             return
         # 층 단위 import: from pkg.l1 import Order
         for layer_name, exports in self._layer_exports.items():
             layer_scope = layer_name.rsplit(".", 1)[0] if "." in layer_name else ""
             if layer_scope != m.scope or rel != layer_name:
                 continue
-            n = int(LAYER_RE.match(layer_name.rsplit(".", 1)[-1]).group(1))
+            n = int(ProjectLayout.LAYER_RE.match(layer_name.rsplit(".", 1)[-1]).group(1))
             if not raw.names:
                 self.edges.append(Edge(m.name, None, n, raw.kind, file, raw.line, rel))
                 return
             for nm in raw.names:
                 folder = exports.get(nm)
                 dst = f"{layer_name}.{folder}" if folder and f"{layer_name}.{folder}" in self.modules else None
-                self.edges.append(Edge(m.name, dst, n, raw.kind, file, raw.line, f"{rel}.{nm}"))
+                self.edges.append(Edge(m.name, dst, n, raw.kind, file, raw.line, f"{rel}.{nm}", via_layer=True))
             return
         # 이 스코프 밖의 대상: 바깥 모듈이 따로 해석한다

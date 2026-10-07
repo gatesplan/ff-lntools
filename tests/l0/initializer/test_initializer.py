@@ -1,12 +1,12 @@
 import json
 from pathlib import Path
 
-from lntools.l0.initializer import PROTOCOL_FILES, Initializer
+from lntools.l0.initializer import Initializer
 
 
 def test_run_creates_docs_claude_md_and_hooks(tmp_path: Path):
     lines = Initializer(tmp_path, home=tmp_path / "home").run()
-    for name in PROTOCOL_FILES:
+    for name in Initializer.PROTOCOL_FILES:
         assert (tmp_path / ".claude" / name).is_file()
     assert sorted(p.name for p in (tmp_path / ".claude").glob("*.md")) == ["for-agent-codingprotocol-ln-structure.md"]
     claude_md = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")

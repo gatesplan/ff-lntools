@@ -5,6 +5,7 @@ import pytest
 from lntools.l0.project_layout import ProjectLayout
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
+from lntools.l1.surface import Surface
 from lntools.l2.checker import Checker
 from lntools.l3.mover import Mover
 
@@ -20,7 +21,7 @@ def test_move_service_to_l1_resolves_c3(layout: ProjectLayout, graph: Graph):
     assert not (layout.package_root / "l2" / "service").exists()
     g = _rescan(layout)
     assert "l1.service" in g.modules
-    assert not [v for v in Checker(g).run() if v.module == "l1.service"]
+    assert not [v for v in Checker(g, Surface(layout, g.modules)).run() if v.module == "l1.service"]
 
 
 def test_absolute_and_layer_level_imports_rewritten(layout: ProjectLayout, graph: Graph):
@@ -51,7 +52,7 @@ def test_relative_sibling_import_inside_moved_module_becomes_absolute(layout: Pr
     moved = (layout.package_root / "l2" / "pair" / "pair.py").read_text(encoding="utf-8")
     assert "from shop.l1.order import Order" in moved
     g = _rescan(layout)
-    assert not [v for v in Checker(g).run() if v.module == "l2.pair"]
+    assert not [v for v in Checker(g, Surface(layout, g.modules)).run() if v.module == "l2.pair"]
 
 
 def test_tests_mirror_moves_and_is_rewritten(layout: ProjectLayout, graph: Graph):

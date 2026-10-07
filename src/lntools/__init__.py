@@ -1,3 +1,3 @@
-from .l4.cli import main
+from .l4.cli import Cli
 
-__all__ = ["main"]
+__all__ = ["Cli"]

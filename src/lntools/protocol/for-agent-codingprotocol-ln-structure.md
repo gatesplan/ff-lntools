@@ -8,7 +8,10 @@ AI 생성 코드의 의존성 관리를 선형화하고, 계층의 목적 없이
 1. 항상 폴더 구조 사용
    - 모든 단순 모듈은 `ln/modulename/` 폴더로 구성
    - 모든 중첩 모듈은 `ln/modulename/lm/submoudle_name` 폴더로 구성
-   - __init__는 모듈이 공개하는 것만을 re-export 한다.
+   - 객체 기반이다. 모듈이 공개하는 이름은 클래스와 타입 별칭(`Answer = Union[A, B]`)뿐이다.
+     함수는 메서드로, 상수는 클래스 속성으로, 진입 함수 `main`은 진입 클래스의 메서드로 둔다.
+     이름이나 파일 이름이 `_`로 시작하면 비공개다.
+   - `__init__.py`는 `lnt doc`이 만든다. 손으로 고치지 않는다 (패키지 루트 `__init__`만 사람이 쓴다).
    - 파일 하나에 클래스 하나. 파일 이름이 그 세부 책임의 이름이 되어, 모듈 폴더만 봐도 무엇으로 이뤄졌는지 보인다.
    - 모듈 하나에 책임 하나. 여러 책임을 한 모듈에 몰면 그 모듈이 허브가 되어 영향 범위(blast)가 무뎌진다.
    - 모듈 안 파일 사이의 관계는 검사하지 않는다(순환 허용). 그 관계까지 검사가 필요해지면 중첩 모듈로 바꾼다. 중첩 안에서는 C1~C4가 걸린다.
@@ -25,6 +28,7 @@ AI 생성 코드의 의존성 관리를 선형화하고, 계층의 목적 없이
 4. 임포트 규칙
    - 항상 낮은 레벨의 모듈만 임포트할 수 있다
    - 낮은 레벨의 표면만 임포트할 수 있고, 중첩 구조 심부로 들어가 임포트해선 안 된다.
+     표면에 없는 이름(함수, 상수, 비공개 클래스)을 가져오는 것도, 같은 층에서 공개 이름이 겹치는 것도 표면 위반(C2)이다.
    - `if TYPE_CHECKING:` 안의 임포트도 의존이다. 층 판정에 포함한다.
    - 모듈 간 순환은 금지. 모듈 내부 파일 간 순환은 규칙 밖 (허용).
 
@@ -74,61 +78,71 @@ tests/
 
 ## __init__.py 패턴
 
-**규칙: 항상 상대 임포트 사용**
+패키지 루트를 뺀 모든 `__init__.py`는 `lnt doc`이 만든다. 손으로 고치지 않는다.
+모듈을 새로 만들거나 공개 이름을 바꾸면 `lnt doc`을 돌린다. 안 돌리면 훅과 `lnt doc --check`가 알린다.
+모든 import는 상대 경로라 모듈을 옮겨도(`lnt move`) 그대로다.
 
-### 모듈 __init__.py
+### 모듈 __init__.py (모듈 표면)
+
+모듈 폴더 바로 아래 파일의 공개 클래스와 타입 별칭을 모두 내보낸다. 이름이나 파일 이름이 `_`로 시작하면 빠진다.
 
 ```python
-# src/fishfactory/l1/order/__init__.py
+# src/fishfactory/l1/order/__init__.py  (lnt doc 이 씀)
+from .order import Order
 
-from .order import Order  # 상대 임포트
-
-__all__ = ['Order']
+__all__ = ["Order"]
 ```
 
-**이유:**
-- 모듈 이동 시 경로 불변 (l1 -> l2 이동 시 수정 불필요)
-- 레벨 변경 자동 반영 (디렉토리 위치 = 계층 상태)
-- 다른 프로젝트 복사 시 패키지명 변경 불필요
-
-**효과:**
 ```python
-# 사용자 코드
-from fishfactory.l1.order import Order  # 짧은 import
+from fishfactory.l1.order import Order  # 모듈 표면 import
 ```
 
-### 레이어 __init__.py
+### 중첩 모듈 __init__.py
 
-각 레이어 폴더(ln/)의 `__init__.py`는 해당 레이어의 모든 모듈을 re-export한다.
-단, 즉시 import하지 않고 PEP 562 모듈 `__getattr__`로 지연 로드한다.
-층에 모듈이 많아도 요청한 모듈만 로드된다.
+안쪽 맨 위 층 모듈들의 표면을 그대로 공개한다. 맨 위 층 클래스의 공개 메서드가 곧 진입점이고, 아래 층은 내부다.
+지연 로드라 안쪽 모듈을 import해도 맨 위 층까지 끌려오지 않는다.
+맨 위 층의 공개 시그니처가 아래 층 타입을 쓰면 바깥에서는 그 타입을 만들 수 없다.
+`lnt review`가 '숨은 타입 노출'로 알리니, 그 타입을 맨 위 층으로 올리거나 중첩 모듈 밖으로 뺀다.
 
 ```python
-# src/fishfactory/l1/__init__.py
+# src/fishfactory/l3/portfolio/__init__.py  (lnt doc 이 씀. 안쪽 맨 위 층이 l1 이고 거기에 store 가 있다)
 import importlib
 
-# 공개 이름 -> 모듈 폴더명. lnt doc이 생성한다
+# 모듈 표면: 안쪽 맨 위 층. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {
-    'Order': 'order',
-    'Pair': 'pair',
+    "Store": "l1.store",
 }
 __all__ = list(_EXPORTS)
 
+
 def __getattr__(name: str):
     if name in _EXPORTS:
-        mod = importlib.import_module(f'.{_EXPORTS[name]}', __name__)
+        mod = importlib.import_module(f".{_EXPORTS[name]}", __name__)
         return getattr(mod, name)
     raise AttributeError(name)
 ```
 
-**효과:**
+### 레이어 __init__.py (층 표면)
+
+그 층 모듈들의 표면을 합친 목록이다. PEP 562 모듈 `__getattr__`로 지연 로드하므로 요청한 모듈만 로드된다.
+같은 층의 두 모듈이 같은 이름을 내놓으면 목록에서 빠지고 C2 위반이 된다(객체 기반에서는 같은 책임 이름을 두 모듈이 주장하는 설계 오류다).
+
+```python
+# src/fishfactory/l1/__init__.py  (lnt doc 이 씀. 위와 같은 지연 로드 형식)
+_EXPORTS = {
+    "Order": "order",
+    "Pair": "pair",
+}
+```
+
 ```python
 from fishfactory.l1 import Order, Pair  # 레이어 단위 import. order, pair만 로드
 ```
 
 ### 패키지 최상단 __init__.py
 
-패키지 루트의 `__init__.py`는 최상위 레이어의 메인 비즈니스 모듈만 노출한다.
+사람이 쓴다. 패키지 루트의 `__init__.py`는 최상위 레이어의 메인 비즈니스 모듈만 노출한다.
+루트를 import하면 패키지 안 어느 모듈을 import해도 함께 실행되므로, 무거운 진입점이면 위 지연 로드 형식으로 쓴다.
 
 ```python
 # src/fishfactory/__init__.py
@@ -285,13 +299,13 @@ Engine과 Momentum은 같은 l2에 있으면서 서로를 모른다.
 lnt check [--file PATH]     # 층 방향, 표면 import, 층 일치, 모듈 간 순환 검사. 위반 시 exit 1
 lnt blast MODULE            # MODULE에 의존하는 상위 모듈 목록 (상속 경유 포함)
 lnt sig [TARGET ...]        # 층이나 모듈의 공개 시그니처. 없으면 전체
-lnt review                  # 점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일. 위반이 아니라 exit 0
-lnt doc [--check]           # layerinfo 생성 / 불일치 검사
+lnt review                  # 점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출. exit 0
+lnt doc [--check]           # layerinfo 와 __init__.py 생성 / 불일치 검사
 lnt move MODULE lK          # 층 이동 + import 경로 재작성
 ```
 
-Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, layerinfo 검사를 실행해
-위반은 해결 방법과 함께 오류로, 영향 범위와 layerinfo 불일치는 정보로 세션에 주입한다.
+Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, layerinfo 와 `__init__.py` 검사를 실행해
+위반은 해결 방법과 함께 오류로, 영향 범위와 문서·`__init__` 불일치, 문법 오류로 읽지 못한 파일은 정보로 세션에 주입한다.
 
 점검 대상(`lnt review`)은 판정이 아니라 질문이다. 정상인 경우가 많아 훅에는 넣지 않고 필요할 때 목록으로 본다.
 - 우회: M이 A를 쓰면서 A 아래의 B도 직접 쓴다. 그 일이 A의 책임이면 A로 옮기고, 다른 용도면 그대로 둔다
@@ -299,6 +313,7 @@ Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, layer
 - 고아: 아무도 import하지 않는 모듈. 남길지 확인한다. 맨 위 층, 패키지 루트나 중첩 모듈 표면이 내보내는 모듈,
   패키지 밖 코드(app/, scripts/, pyproject의 scripts)가 쓰는 모듈은 빼고 보인다
 - 클래스가 여럿인 파일: 1파일 1클래스 점검. 파일을 나눠 세부 책임을 드러낼지 확인한다. 진입점(맨 위 층)은 예외라 빼고 보인다
+- 숨은 타입 노출: 중첩 모듈 맨 위 층의 공개 시그니처가 표면에 없는 안쪽 타입을 쓴다. 맨 위 층으로 올리거나 중첩 모듈 밖으로 뺀다
 
 ## 전체 예시
 

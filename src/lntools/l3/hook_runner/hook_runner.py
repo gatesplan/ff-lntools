@@ -6,6 +6,7 @@ from lntools.l0.project_layout import ProjectLayout
 from lntools.l0.violation import Violation
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
+from lntools.l1.surface import Surface
 from lntools.l2.blaster import Blaster
 from lntools.l2.checker import Checker
 from lntools.l2.doc_generator import DocGenerator
@@ -53,7 +54,8 @@ class HookRunner:
         if not chain:
             return 0
         names = {m.name for m in chain}
-        violations = Checker(graph).run(only=names)
+        surface = Surface(layout, modules)
+        violations = Checker(graph, surface).run(only=names)
         if violations:
             sys.stderr.write("[lnt] ln-structure 위반. 수정 후 진행:\n")
             for v in violations:
@@ -67,8 +69,12 @@ class HookRunner:
         for m in chain:
             lines.extend(blaster.lines(m.name))
         scopes = {m.scope for m in chain}
-        for d in DocGenerator(layout, graph).check(scopes):
+        docs = DocGenerator(layout, graph, surface)
+        for d in docs.check(scopes):
             lines.append(f"문서 불일치: {d}. lnt doc 으로 재생성")
+        for p in docs.stale_inits(names):
+            lines.append(f"__init__ 불일치: {p}. lnt doc 으로 재생성")
+        lines.extend(docs.unreadable_notices())
         out = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}}
         sys.stdout.write(json.dumps(out, ensure_ascii=False))
         return 0

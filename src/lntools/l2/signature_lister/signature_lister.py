@@ -1,13 +1,16 @@
 from lntools.l0.module_ref import ModuleRef
+from lntools.l0.project_layout import ProjectLayout
 from lntools.l0.signature_extractor import SignatureExtractor
 from lntools.l1.graph import Graph
+from lntools.l1.surface import Surface
 
 
 # lnt sig. 층이나 모듈의 공개 시그니처를 문서로 두지 않고 그 자리에서 계산한다
 class SignatureLister:
-    def __init__(self, graph: Graph, package: str = ""):
+    def __init__(self, layout: ProjectLayout, graph: Graph):
         self.graph = graph
-        self.package = package
+        self.package = layout.package_name
+        self.surface = Surface(layout, graph.modules)
         self.sig = SignatureExtractor()
         self.missing: list[str] = []
 
@@ -34,9 +37,9 @@ class SignatureLister:
                 out.append(f"대상 없음: {t}")
                 continue
             for m in mods:
-                exported = self.sig.exports_of(m.path)
+                names = sorted(self.surface.of_module(m.name))
                 out.append(f"## {m.name}")
-                out.extend(self.sig.extract(m.path, exported) if exported else ["(공개 이름 없음)"])
+                out.extend(self.sig.extract(m.path, names) if names else ["(공개 이름 없음)"])
                 out.append("")
         return out[:-1] if out and out[-1] == "" else out
 

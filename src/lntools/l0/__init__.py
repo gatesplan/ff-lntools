@@ -1,11 +1,9 @@
 import importlib
 
-# 공개 이름 -> 모듈 폴더명. 지연 로드
+# 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {
     "Edge": "edge",
     "Initializer": "initializer",
-    "LAYER_RE": "project_layout",
-    "PROTOCOL_FILES": "initializer",
     "ModuleRef": "module_ref",
     "ProjectLayout": "project_layout",
     "RawImport": "raw_import",

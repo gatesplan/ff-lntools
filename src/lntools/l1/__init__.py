@@ -1,9 +1,10 @@
 import importlib
 
+# 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {
     "Graph": "graph",
-    "LayerInitWriter": "layer_init_writer",
     "Scanner": "scanner",
+    "Surface": "surface",
 }
 __all__ = list(_EXPORTS)
 

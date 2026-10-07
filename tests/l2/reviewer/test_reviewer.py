@@ -71,4 +71,9 @@ def test_crowded_files_skip_top_layer(layout: ProjectLayout):
 def test_lines_summary(layout: ProjectLayout, graph: Graph):
     lines = Reviewer(layout, graph).lines()
     assert lines[0].startswith("고아:")
-    assert lines[-1] == "점검 대상 4건"
+    assert lines[-1] == "점검 대상 5건"
+
+
+# 샘플의 Store.put(snap: TickSnapshot, ...) 은 표면에 없는 안쪽 타입을 쓴다. 바깥에서는 TickSnapshot 을 만들 수 없다
+def test_leaked_inner_type(layout: ProjectLayout, graph: Graph):
+    assert Reviewer(layout, graph).leaks() == [("l3.portfolio", "TickSnapshot", "l3.portfolio.l0.tick_snapshot")]

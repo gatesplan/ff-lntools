@@ -2,22 +2,24 @@ import ast
 import re
 from pathlib import Path
 
-from lntools.l0.project_layout import LAYER_RE, ProjectLayout
+from lntools.l0.project_layout import ProjectLayout
 from lntools.l0.signature_extractor import SignatureExtractor
 from lntools.l1.graph import Graph
+from lntools.l1.surface import Surface
 
 SKIP_DIRS = {"tests", "build", "dist", "venv", "env", "node_modules", "site-packages", "__pycache__"}
 SCRIPTS_RE = re.compile(r"^\[project\.scripts\]\s*$(.*?)(?=^\[|\Z)", re.M | re.S)
 SCRIPT_TARGET_RE = re.compile(r'=\s*"([\w.]+)')
 
 
-# lnt review. 위반은 아니지만 한 번 볼 만한 구조: 우회 의존, 아무도 쓰지 않는 모듈
+# lnt review. 위반은 아니지만 한 번 볼 만한 구조: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출
 class Reviewer:
     def __init__(self, layout: ProjectLayout, graph: Graph):
         self.layout = layout
         self.graph = graph
         self.pkg = layout.package_name
         self.sig = SignatureExtractor()
+        self.surface = Surface(layout, graph.modules)
         self._reach_cache: dict[str, set[str]] = {}
         self._sig_cache: dict[str, str] = {}
 
@@ -44,7 +46,7 @@ class Reviewer:
     def _signature_text(self, name: str) -> str:
         if name not in self._sig_cache:
             path = self.graph.modules[name].path
-            self._sig_cache[name] = "\n".join(self.sig.extract(path, self.sig.exports_of(path)))
+            self._sig_cache[name] = "\n".join(self.sig.extract(path, sorted(self.surface.of_module(name))))
         return self._sig_cache[name]
 
     # a 의 공개 시그니처에 나오는 이름. 시그니처에 쓰인 모듈 수준 타입 별칭은 그 안의 이름까지 (EntityType = Union[Character, ...])
@@ -61,7 +63,7 @@ class Reviewer:
 
     # a 의 공개 시그니처에 b 의 공개 이름이 나오면 b 는 a 를 쓰는 데 필요한 어휘다. 그때 b 를 직접 쓰는 것은 우회가 아니다
     def _takes(self, a: str, b: str) -> bool:
-        return bool(set(self.sig.exports_of(self.graph.modules[b].path)) & self._interface_names(a))
+        return bool(set(self.surface.of_module(b)) & self._interface_names(a))
 
     # 우회: name 이 직접 쓰는 b 를, name 이 쓰는 다른 모듈도 (거쳐서) 쓴다. 반환: [(b, [그 다른 모듈...])]
     # b 가 l0 이면 어휘로 보고 뺀다. name 이 맨 위 층이거나 b 를 받는 모듈에 넘겨 주는 경우는 조립이므로 뺀다
@@ -104,6 +106,25 @@ class Reviewer:
                     out.append((name, f.name, count))
         return out
 
+    # 숨은 타입 노출: 중첩 모듈 맨 위 층의 공개 시그니처가 표면에 없는 안쪽 이름을 쓴다. 바깥에서는 그 타입을 만들 수 없다
+    # 반환: [(중첩 모듈, 숨은 이름, 그 이름을 내놓는 안쪽 모듈)]
+    def leaks(self) -> list[tuple[str, str, str]]:
+        out: list[tuple[str, str, str]] = []
+        for name, m in sorted(self.graph.modules.items()):
+            inner = [x for x in self.graph.modules.values() if x.scope == name]
+            if not m.is_nested or not inner:
+                continue
+            public = set(self.surface.of_module(name))
+            top = max(x.layer for x in inner)
+            words: set[str] = set()
+            for x in inner:
+                if x.layer == top:
+                    words |= set(re.findall(r"[A-Za-z_]\w*", self._signature_text(x.name)))
+            for x in sorted(inner, key=lambda x: x.name):
+                if x.layer < top:
+                    out.extend((name, h, x.name) for h in sorted(set(self.surface.of_module(x.name)) - public) if h in words)
+        return out
+
     def lines(self) -> list[str]:
         out: list[str] = []
         found = [(n, b, via) for n in sorted(self.graph.modules) for b, via in self.bypasses(n)]
@@ -118,27 +139,27 @@ class Reviewer:
         if crowded:
             out.append("클래스가 여럿인 파일: 파일을 나눠 세부 책임을 드러낼지 확인")
             out.extend(f"  {n}/{f}: 클래스 {k}개" for n, f, k in crowded)
-        out.append(f"점검 대상 {len(found) + len(orphans) + len(crowded)}건")
+        leaks = self.leaks()
+        if leaks:
+            out.append("숨은 타입 노출: 중첩 모듈의 공개 시그니처가 표면에 없는 타입을 쓴다. 맨 위 층으로 올리거나 중첩 모듈 밖으로 뺀다")
+            out.extend(f"  {n}: {h} ({src})" for n, h, src in leaks)
+        out.append(f"점검 대상 {len(found) + len(orphans) + len(crowded) + len(leaks)}건")
         return out
 
     # ---- 쓰임 수집 ----
 
-    # 패키지 루트와 중첩 모듈의 __init__ 가 상대 import 로 내보내는 모듈
+    # 사람이 쓰는 패키지 루트 __init__ 이 내보내는 모듈. from .x import Y 와 지연 로드 _EXPORTS 값 둘 다 본다
+    # 중첩 모듈 표면은 맨 위 층이라 고아 판정에서 이미 빠진다
     def _init_uses(self) -> set[str]:
-        dirs = [self.layout.package_root] + [m.path for m in self.graph.modules.values() if m.is_nested]
+        tree = self._parse(self.layout.package_root / "__init__.py")
         out: set[str] = set()
-        for d in dirs:
-            for node in self._imports(d / "__init__.py"):
-                if isinstance(node, ast.ImportFrom) and node.level >= 1:
-                    base = d
-                    for _ in range(node.level - 1):
-                        base = base.parent
-                    target = base.joinpath(*node.module.split(".")) if node.module else base
-                    try:
-                        rel = target.relative_to(self.layout.package_root).parts
-                    except ValueError:
-                        continue
-                    out |= self._resolve(".".join(rel), [a.name for a in node.names])
+        for node in tree.body if tree else []:
+            if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+                out |= self._resolve(node.module, [a.name for a in node.names])
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict):
+                for v in node.value.values:
+                    if isinstance(v, ast.Constant) and isinstance(v.value, str):
+                        out |= self._resolve(v.value, [])
         return out
 
     # 패키지 밖 파이썬 파일(app/, scripts/ 등. tests 제외)과 pyproject 의 [project.scripts] 가 쓰는 모듈
@@ -191,12 +212,10 @@ class Reviewer:
             return set()
         return self._resolve(dotted[len(self.pkg):].lstrip("."), names)
 
-    # 패키지 기준 점 경로를 모듈 이름으로. 층 단위 import 는 층 __init__ 의 공개 이름으로 푼다
+    # 패키지 기준 점 경로를 모듈 이름으로. 층 단위 import 는 층 표면으로 푼다
     def _resolve(self, rel: str, names: list[str]) -> set[str]:
-        if rel and LAYER_RE.match(rel.rsplit(".", 1)[-1]):
-            layer_dir = self.layout.package_root.joinpath(*rel.split("."))
-            if layer_dir.is_dir():
-                exports = SignatureExtractor.layer_exports(layer_dir / "__init__.py")
-                return {f"{rel}.{exports[nm]}" for nm in names if f"{rel}.{exports.get(nm)}" in self.graph.modules}
+        if rel in self.surface.layer_names():
+            folders = self.surface.of_layer(rel)[0]
+            return {f"{rel}.{folders[nm]}" for nm in names if nm in folders}
         best = max((n for n in self.graph.modules if rel == n or rel.startswith(n + ".")), key=len, default="")
         return {best} if best else set()

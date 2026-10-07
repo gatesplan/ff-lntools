@@ -22,7 +22,7 @@ def test_check_prints_hints_once_per_code(sample: Path, capsys):
 
 def test_review_exits_0_even_with_findings(sample: Path, capsys):
     assert Cli(["--root", str(sample), "review"]).run() == 0
-    assert "점검 대상 4건" in capsys.readouterr().out
+    assert "점검 대상 5건" in capsys.readouterr().out
 
 
 def test_doc_writes_layerinfo_only(sample: Path, capsys):

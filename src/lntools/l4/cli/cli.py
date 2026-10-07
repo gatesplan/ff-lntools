@@ -7,6 +7,7 @@ from lntools.l0.project_layout import ProjectLayout
 from lntools.l0.violation import Violation
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
+from lntools.l1.surface import Surface
 from lntools.l2.blaster import Blaster
 from lntools.l2.checker import Checker
 from lntools.l2.doc_generator import DocGenerator
@@ -33,7 +34,7 @@ class Cli:
         b.add_argument("module")
         b.add_argument("-d", "--depth", type=int, default=1)
 
-        d = sub.add_parser("doc", help="layerinfo 문서 생성/검사")
+        d = sub.add_parser("doc", help="layerinfo 와 __init__.py(모듈 표면, 층 표면) 생성/검사")
         d.add_argument("--check", action="store_true", help="생성 결과와 파일 비교만")
         d.add_argument("--stamp", metavar="MODULE", help="예전 moduleinfo 의 sources hash 갱신 (호환용). all 이면 문서가 있는 모든 모듈")
 
@@ -42,7 +43,7 @@ class Cli:
         s = sub.add_parser("sig", help="공개 시그니처 조회. 문서로 두지 않고 그 자리에서 계산")
         s.add_argument("targets", nargs="*", help="층(l1), 모듈(l1.order), 모듈 이름(order). 없으면 전체")
 
-        sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈. 위반이 아니라 exit 0")
+        sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출. 위반이 아니라 exit 0")
 
         mv = sub.add_parser("move", help="모듈을 다른 층으로 이동. import, tests 미러, 층 __init__, 문서 갱신")
         mv.add_argument("module")
@@ -83,7 +84,7 @@ class Cli:
             if args.file:
                 chain = graph.modules_of(Path(args.file))
                 only = {x.name for x in chain}
-            violations = Checker(graph).run(only)
+            violations = Checker(graph, Surface(layout, modules)).run(only)
             for v in violations:
                 print(v.format(layout.project_root))
             for h in Violation.hints(violations):
@@ -110,7 +111,7 @@ class Cli:
             return 0
 
         if args.cmd == "sig":
-            lister = SignatureLister(graph, layout.package_name)
+            lister = SignatureLister(layout, graph)
             print(lister.report(args.targets))
             return 1 if lister.missing else 0
 
@@ -147,6 +148,7 @@ class Cli:
             return 0
         return 1
 
-
-def main(argv: list[str] | None = None) -> int:
-    return Cli(sys.argv[1:] if argv is None else argv).run()
+    # 명령줄 진입. pyproject 의 lnt 와 python -m lntools 가 부른다
+    @staticmethod
+    def main(argv: list[str] | None = None) -> int:
+        return Cli(sys.argv[1:] if argv is None else argv).run()

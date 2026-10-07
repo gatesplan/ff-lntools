@@ -39,7 +39,9 @@ def test_check_detects_new_module(layout: ProjectLayout, graph: Graph):
     (mod / "clock.py").write_text("class Clock:\n    pass\n", encoding="utf-8")
     (mod / "__init__.py").write_text("from .clock import Clock\n\n__all__ = ['Clock']\n", encoding="utf-8")
     modules, edges = Scanner(layout).scan()
-    assert DocGenerator(layout, Graph(modules, edges)).check() == ["src/shop/for-agent-layerinfo.md"]
+    bad = DocGenerator(layout, Graph(modules, edges)).check()
+    assert "src/shop/for-agent-layerinfo.md" in bad
+    assert "src/shop/l0/__init__.py" in bad and "src/shop/l0/clock/__init__.py" in bad
 
 
 def test_check_limited_to_scopes(layout: ProjectLayout, graph: Graph):
@@ -63,3 +65,21 @@ def test_stamp_writes_sources_header(layout: ProjectLayout, graph: Graph):
     text = p.read_text(encoding="utf-8")
     assert text.startswith("---\nsources:\n  order.py: ")
     assert "# order" in text
+
+
+# 표면에서 빠질 이름(함수)이 아직 코드에 있으면 그 __init__ 은 쓰지 않고 알린다. 정의를 지우면 다음 생성 때 쓴다
+def test_init_kept_while_dropped_name_still_defined(layout: ProjectLayout):
+    d = layout.package_root / "l0" / "clock"
+    d.mkdir()
+    (d / "clock.py").write_text("class Clock:\n    pass\n\n\ndef now() -> int:\n    return 0\n", encoding="utf-8")
+    old = "from .clock import Clock, now\n\n__all__ = ['Clock', 'now']\n"
+    (d / "__init__.py").write_text(old, encoding="utf-8")
+    modules, edges = Scanner(layout).scan()
+    docs = DocGenerator(layout, Graph(modules, edges))
+    docs.write_all()
+    assert (d / "__init__.py").read_text(encoding="utf-8") == old
+    assert any("src/shop/l0/clock/__init__.py" in n and "now" in n for n in docs.notices)
+    (d / "clock.py").write_text("class Clock:\n    @staticmethod\n    def now() -> int:\n        return 0\n", encoding="utf-8")
+    modules, edges = Scanner(layout).scan()
+    DocGenerator(layout, Graph(modules, edges)).write_all()
+    assert "now" not in (d / "__init__.py").read_text(encoding="utf-8")

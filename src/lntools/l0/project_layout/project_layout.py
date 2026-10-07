@@ -1,11 +1,11 @@
 import re
 from pathlib import Path
 
-LAYER_RE = re.compile(r"^l(\d+)$")
 
-
-# 프로젝트 루트와 패키지 루트(src/<pkg>) 위치
+# 프로젝트 루트와 패키지 루트(src/<pkg>) 위치. 층 폴더 이름 규칙 LAYER_RE
 class ProjectLayout:
+    LAYER_RE = re.compile(r"^l(\d+)$")
+
     def __init__(self, project_root: Path, package_root: Path):
         self.project_root = project_root.resolve()
         self.package_root = package_root.resolve()
@@ -22,7 +22,7 @@ class ProjectLayout:
     def has_layers(d: Path) -> bool:
         if not d.is_dir():
             return False
-        return any(c.is_dir() and LAYER_RE.match(c.name) for c in d.iterdir())
+        return any(c.is_dir() and ProjectLayout.LAYER_RE.match(c.name) for c in d.iterdir())
 
     # start(파일 또는 디렉토리)에서 위로 올라가며 src/<pkg>/lN 을 가진 프로젝트를 찾는다
     @classmethod

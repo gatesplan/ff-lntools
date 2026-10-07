@@ -1,3 +1,4 @@
-from .initializer import Initializer, PROTOCOL_FILES
+# 모듈 표면. lnt doc 이 생성한다
+from .initializer import Initializer
 
-__all__ = ["Initializer", "PROTOCOL_FILES"]
+__all__ = ["Initializer"]

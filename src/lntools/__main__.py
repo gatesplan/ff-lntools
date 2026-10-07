@@ -1,5 +1,5 @@
 import sys
 
-from .l4.cli import main
+from .l4.cli import Cli
 
-sys.exit(main())
+sys.exit(Cli.main())

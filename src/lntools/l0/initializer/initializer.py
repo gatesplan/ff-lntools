@@ -2,13 +2,12 @@ import json
 from importlib import resources
 from pathlib import Path
 
-PROTOCOL_FILES = [
-    "for-agent-codingprotocol-ln-structure.md",
-]
-
-
 # 프로젝트에 코딩 프로토콜을 설치한다. 문서 복사, CLAUDE.md, 훅 병합, 스킬 설치
 class Initializer:
+    PROTOCOL_FILES = [
+        "for-agent-codingprotocol-ln-structure.md",
+    ]
+
     def __init__(self, project_root: Path, home: Path | None = None):
         self.project_root = project_root
         self.home = home if home is not None else Path.home()
@@ -22,7 +21,7 @@ class Initializer:
     def run(self) -> list[str]:
         done: list[str] = []
         self.claude_dir.mkdir(parents=True, exist_ok=True)
-        for name in PROTOCOL_FILES:
+        for name in self.PROTOCOL_FILES:
             (self.claude_dir / name).write_text(self._protocol(name), encoding="utf-8")
             done.append(f".claude/{name}")
         claude_md = self.project_root / "CLAUDE.md"

@@ -36,7 +36,7 @@ Four rules.
 | Code | Rule |
 |---|---|
 | C1 | Import only from **lower layers**. Same layer is forbidden too |
-| C2 | Import only the module **surface** (`shop.l1.order`). Never reach into its files or into a nested module's internals |
+| C2 | Import only names on a **surface**: a module (`shop.l1.order`) or a layer (`shop.l1`). Never reach into a module's files or a nested module's internals, never import a name the surface does not publish, and no two modules in one layer may publish the same name |
 | C3 | A module's layer = max(layer of its dependencies) + 1. No dependencies means l0. Any third-party package means at least l1 |
 | C4 | No cycles between modules |
 
@@ -62,8 +62,8 @@ is checked and violations come back as errors.
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
 | `lnt map` | Modules, layers, dependencies at a glance |
 | `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |
-| `lnt review` | Things worth a look, not violations: bypassing dependencies, modules nothing uses, files with more than one class. Always exit 0 |
-| `lnt doc` | Generate the module map (`for-agent-layerinfo.md`) |
+| `lnt review` | Things worth a look, not violations: bypassing dependencies, modules nothing uses, files with more than one class, nested modules leaking hidden types. Always exit 0 |
+| `lnt doc` | Generate the module map (`for-agent-layerinfo.md`) and every `__init__.py` except the package root (module and layer surfaces) |
 | `lnt doc --check` | Exit 1 if docs drifted from code |
 | `lnt move MODULE lK` | Relocate a module and rewrite imports, tests mirror, layer `__init__`, docs |
 
@@ -106,10 +106,12 @@ my-project/
 ### Write code, check it
 
 Create module folders under `src/<package>/l0/`, `l1/`, ... One module = one folder = one file (by default) = one class.
+ln-structure is object based: a module publishes classes and type aliases only (functions become methods, constants become
+class attributes, names or files starting with `_` stay private). Do not write `__init__.py` by hand; `lnt doc` generates it.
 
 ```
 lnt check          # rules
-lnt doc            # docs
+lnt doc            # module map and __init__.py files
 lnt map            # overview
 ```
 

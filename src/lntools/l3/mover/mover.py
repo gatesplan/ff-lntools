@@ -4,28 +4,26 @@ import shutil
 from pathlib import Path
 
 from lntools.l0.module_ref import ModuleRef
-from lntools.l0.project_layout import LAYER_RE, ProjectLayout
-from lntools.l0.signature_extractor import SignatureExtractor
+from lntools.l0.project_layout import ProjectLayout
 from lntools.l1.graph import Graph
-from lntools.l1.layer_init_writer import LayerInitWriter
 from lntools.l1.scanner import Scanner
+from lntools.l1.surface import Surface
 from lntools.l2.doc_generator import DocGenerator
 
 
-# 모듈을 다른 층으로 옮기고 import 경로, 테스트 미러, 층 __init__, 문서를 맞춘다
+# 모듈을 다른 층으로 옮기고 import 경로, 테스트 미러, __init__, 문서를 맞춘다
 class Mover:
     def __init__(self, layout: ProjectLayout, graph: Graph):
         self.layout = layout
         self.graph = graph
         self.pkg = layout.package_name
-        self.sig = SignatureExtractor()
         self.changed: list[str] = []
 
     # target_layer: "l2" 처럼 층 이름만. 같은 스코프 안에서 옮긴다
     def move(self, name: str, target_layer: str) -> list[str]:
         if name not in self.graph.modules:
             raise ValueError(f"모듈 없음: {name}")
-        if not LAYER_RE.match(target_layer):
+        if not ProjectLayout.LAYER_RE.match(target_layer):
             raise ValueError(f"층 이름 형식 오류: {target_layer}")
         m = self.graph.modules[name]
         old_layer = m.layer_name
@@ -37,7 +35,7 @@ class Mover:
         new_dir = scope_dir / target_layer / m.basename
         if new_dir.exists():
             raise ValueError(f"대상이 이미 있음: {self.layout.relative(new_dir)}")
-        exports = set(self.sig.exports_of(m.path))
+        exports = set(Surface(self.layout, self.graph.modules).of_module(name))
 
         # 1. 이동 전에 import 를 고친다 (상대 import 해석은 옛 위치 기준)
         for f in self._all_py_files():
@@ -56,17 +54,10 @@ class Mover:
             shutil.move(str(old_test), str(new_test))
             self.changed.append(f"이동 {self.layout.relative(old_test)} -> {self.layout.relative(new_test)}")
 
-        # 4. 층 __init__ 와 문서 재생성
+        # 4. __init__ 와 문서 재생성. 빈 층의 __init__ 도 비운다
         modules, edges = Scanner(self.layout).scan()
         graph = Graph(modules, edges)
-        writer = LayerInitWriter()
-        for layer_name in (old_layer, new_layer):
-            layer_dir = scope_dir / layer_name.rsplit(".", 1)[-1]
-            mods = [x for x in modules.values() if x.layer_name == layer_name]
-            if layer_dir.is_dir():
-                writer.write(layer_dir, mods)
-                self.changed.append(f"재생성 {self.layout.relative(layer_dir / '__init__.py')}")
-        for p in DocGenerator(self.layout, graph).write_all():
+        for p in DocGenerator(self.layout, graph, Surface(self.layout, modules)).write_all():
             self.changed.append(f"문서 {self.layout.relative(p)}")
         self.changed.append(f"완료. lnt check 로 연쇄 이동 여부 확인 ({new_name})")
         return self.changed
