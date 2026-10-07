@@ -9,6 +9,7 @@ from lntools.l1.scanner import Scanner
 from lntools.l2.blaster import Blaster
 from lntools.l2.checker import Checker
 from lntools.l2.doc_generator import DocGenerator
+from lntools.l2.reviewer import Reviewer
 
 
 # Claude Code 훅 진입. stdin JSON 을 읽고 exit code 와 출력 채널을 정한다
@@ -66,6 +67,10 @@ class HookRunner:
         blaster = Blaster(graph)
         for m in chain:
             lines.extend(blaster.lines(m.name))
+        reviewer = Reviewer(layout, graph)
+        for m in chain:
+            for b, via in reviewer.bypasses(m.name):
+                lines.append(f"점검(우회): {m.name} -> {b} 직접 사용. {', '.join(via)} 도 {b} 를 쓴다. 그 일이 누구 책임인지 확인")
         scopes = {m.scope for m in chain}
         for d in DocGenerator(layout, graph).check(scopes):
             lines.append(f"문서 불일치: {d}. lnt doc 으로 재생성")

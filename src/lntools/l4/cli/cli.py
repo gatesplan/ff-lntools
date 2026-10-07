@@ -10,6 +10,7 @@ from lntools.l1.scanner import Scanner
 from lntools.l2.blaster import Blaster
 from lntools.l2.checker import Checker
 from lntools.l2.doc_generator import DocGenerator
+from lntools.l2.reviewer import Reviewer
 from lntools.l2.signature_lister import SignatureLister
 from lntools.l3.hook_runner import HookRunner
 from lntools.l3.mover import Mover
@@ -40,6 +41,8 @@ class Cli:
 
         s = sub.add_parser("sig", help="공개 시그니처 조회. 문서로 두지 않고 그 자리에서 계산")
         s.add_argument("targets", nargs="*", help="층(l1), 모듈(l1.order), 모듈 이름(order). 없으면 전체")
+
+        sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈. 위반이 아니라 exit 0")
 
         mv = sub.add_parser("move", help="모듈을 다른 층으로 이동. import, tests 미러, 층 __init__, 문서 갱신")
         mv.add_argument("module")
@@ -99,6 +102,11 @@ class Cli:
             except ValueError as e:
                 sys.stderr.write(f"{e}\n")
                 return 1
+            return 0
+
+        if args.cmd == "review":
+            for line in Reviewer(layout, graph).lines():
+                print(line)
             return 0
 
         if args.cmd == "sig":

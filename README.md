@@ -62,6 +62,7 @@ is checked and violations come back as errors.
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
 | `lnt map` | Modules, layers, dependencies at a glance |
 | `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |
+| `lnt review` | Things worth a look, not violations: bypassing dependencies, modules nothing uses, files with more than one class. Always exit 0 |
 | `lnt doc` | Generate the module map (`for-agent-layerinfo.md`) |
 | `lnt doc --check` | Exit 1 if docs drifted from code |
 | `lnt move MODULE lK` | Relocate a module and rewrite imports, tests mirror, layer `__init__`, docs |
@@ -137,7 +138,7 @@ When `lnt check` reports C3 ("declared l2, computed l1"), run `lnt move <module>
   oriented instead of grepping
 - **PostToolUse**: runs after every edit to `src/**/*.py`
   - Violations: **exit 2 + stderr**. The agent receives an error, with how to resolve each kind of violation, and cannot proceed until fixed
-  - No violations: the blast radius and module map drift (fix with `lnt doc`) are returned as context
+  - No violations: the blast radius, bypassing dependencies of the edited module, and module map drift (fix with `lnt doc`) are returned as context
 
 Hooks are executed by Claude Code itself, not by the agent. The check happens even if the agent "forgets" the rules.
 

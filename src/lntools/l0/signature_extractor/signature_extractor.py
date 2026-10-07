@@ -20,6 +20,28 @@ class SignatureExtractor:
                 names.extend(a.asname or a.name for a in node.names)
         return names
 
+    # 층 __init__ 의 공개 이름 -> 모듈 폴더명. from .x import Y 와 _EXPORTS 딕셔너리 둘 다 지원
+    @staticmethod
+    def layer_exports(init: Path) -> dict[str, str]:
+        out: dict[str, str] = {}
+        if not init.is_file():
+            return out
+        try:
+            tree = ast.parse(init.read_text(encoding="utf-8"), filename=str(init))
+        except SyntaxError:
+            return out
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+                folder = node.module.split(".")[0]
+                for a in node.names:
+                    out[a.asname or a.name] = folder
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict):
+                if any(isinstance(t, ast.Name) and t.id == "_EXPORTS" for t in node.targets):
+                    for k, v in zip(node.value.keys, node.value.values):
+                        if isinstance(k, ast.Constant) and isinstance(v, ast.Constant):
+                            out[str(k.value)] = str(v.value)
+        return out
+
     # 공개 이름 각각의 시그니처 줄. 클래스는 Class.method(...) -> ret, 함수는 name(...) -> ret
     # 각 줄 끝에 정의가 있는 파일을 모듈 디렉토리 기준으로 붙인다
     def extract(self, module_dir: Path, exported: list[str]) -> list[str]:

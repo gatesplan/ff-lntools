@@ -6,6 +6,7 @@ from lntools.l0.edge import Edge
 from lntools.l0.module_ref import ModuleRef
 from lntools.l0.project_layout import LAYER_RE, ProjectLayout
 from lntools.l0.raw_import import RawImport
+from lntools.l0.signature_extractor import SignatureExtractor
 
 
 # src/<pkg>/ 를 훑어 모듈 목록과 의존 간선을 만든다
@@ -40,7 +41,7 @@ class Scanner:
                 continue
             n = int(mt.group(1))
             layer_name = f"{scope_name}.{layer_dir.name}" if scope_name else layer_dir.name
-            self._layer_exports[layer_name] = self._read_layer_exports(layer_dir / "__init__.py")
+            self._layer_exports[layer_name] = SignatureExtractor.layer_exports(layer_dir / "__init__.py")
             for mdir in sorted(layer_dir.iterdir()):
                 if not mdir.is_dir() or mdir.name.startswith(("_", ".")):
                     continue
@@ -52,27 +53,6 @@ class Scanner:
                 self.modules[name] = ModuleRef(name, scope_name, n, mdir, files, is_nested=nested)
                 if nested:
                     self._discover(mdir, name)
-
-    # 층 __init__ 의 공개 이름 매핑. from .x import Y 와 _EXPORTS 딕셔너리 둘 다 지원
-    def _read_layer_exports(self, init: Path) -> dict[str, str]:
-        out: dict[str, str] = {}
-        if not init.is_file():
-            return out
-        try:
-            tree = ast.parse(init.read_text(encoding="utf-8"), filename=str(init))
-        except SyntaxError:
-            return out
-        for node in tree.body:
-            if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
-                folder = node.module.split(".")[0]
-                for a in node.names:
-                    out[a.asname or a.name] = folder
-            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict):
-                if any(isinstance(t, ast.Name) and t.id == "_EXPORTS" for t in node.targets):
-                    for k, v in zip(node.value.keys, node.value.values):
-                        if isinstance(k, ast.Constant) and isinstance(v, ast.Constant):
-                            out[str(k.value)] = str(v.value)
-        return out
 
     def _parse(self, file: Path) -> list[RawImport]:
         out: list[RawImport] = []

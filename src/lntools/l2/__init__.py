@@ -4,6 +4,7 @@ _EXPORTS = {
     "Blaster": "blaster",
     "Checker": "checker",
     "DocGenerator": "doc_generator",
+    "Reviewer": "reviewer",
     "SignatureLister": "signature_lister",
 }
 __all__ = list(_EXPORTS)

@@ -20,6 +20,11 @@ def test_check_prints_hints_once_per_code(sample: Path, capsys):
         assert sum(1 for ln in lines if ln.startswith(f"{code} 풀이")) == 1
 
 
+def test_review_exits_0_even_with_findings(sample: Path, capsys):
+    assert Cli(["--root", str(sample), "review"]).run() == 0
+    assert "점검 대상 4건" in capsys.readouterr().out
+
+
 def test_doc_writes_layerinfo_only(sample: Path, capsys):
     assert Cli(["--root", str(sample), "doc"]).run() == 0
     pkg = sample / "src" / "shop"

@@ -41,6 +41,21 @@ def test_context_reports_layerinfo_drift_only(sample: Path, layout: ProjectLayou
     assert "문서 불일치" not in ctx
 
 
+def test_context_reports_bypass_of_edited_module(sample: Path, capsys):
+    pkg = sample / "src/shop"
+    for rel, body in [
+        ("l2/ledger", "from shop.l1.order import Order\n\n\nclass Ledger:\n    def total(self) -> float:\n        return 0.0\n"),
+        ("l3/audit", "from shop.l1.order import Order\nfrom shop.l2.ledger import Ledger\n\n\nclass Audit:\n    pass\n"),
+    ]:
+        d = pkg / rel
+        d.mkdir(parents=True)
+        (d / f"{d.name}.py").write_text(body, encoding="utf-8")
+        (d / "__init__.py").write_text(f"from .{d.name} import {d.name.capitalize()}\n", encoding="utf-8")
+    HookRunner(_payload(pkg / "l3/audit/audit.py"), sample).post_edit()
+    ctx = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
+    assert "점검(우회): l3.audit -> l1.order" in ctx
+
+
 def test_non_python_or_outside_is_silent(sample: Path, capsys):
     assert HookRunner(_payload(sample / "README.md"), sample).post_edit() == 0
     assert HookRunner(_payload(sample / "tests" / "x.py"), sample).post_edit() == 0
