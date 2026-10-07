@@ -18,7 +18,6 @@ src/shop/
     candle/
       candle.py             # class Candle
       __init__.py           # from .candle import Candle
-      for-agent-moduleinfo.md
   l1/                       # l0 만 의존
     order/
       order.py              # class Order  (from shop.l0.candle import Candle)
@@ -46,7 +45,7 @@ tests/
 - 에이전트가 만든 코드의 의존성이 얽히는 것을 구조적으로 막는다. 순환이 생길 수 없다
 - 어떤 모듈을 고쳤을 때 영향 범위가 "그보다 위 층"으로 한정된다. 도구가 정확히 계산할 수 있다
 - 층에 의미가 없으므로 "이건 서비스인가 유틸인가" 같은 분류 논쟁이 없다. 의존을 추가하면 층이 올라갈 뿐이다
-- 에이전트가 문서를 3단계 해상도(전체 목록 / 층별 시그니처 / 모듈 상세)로 읽어 필요한 만큼만 탐색한다
+- 에이전트는 모듈 지도(모듈마다 책임 한 줄)에서 시작해 시그니처는 `lnt sig` 로 조회하고, 상세는 코드를 읽는다
 
 상세 규칙(중첩 모듈, 상호 호출 처리, 의존성 역전, `__init__` 패턴)은
 [`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md).
@@ -62,7 +61,8 @@ tests/
 | `lnt check` | C1~C4 검사. 위반 시 exit 1 |
 | `lnt blast MODULE` | 이 모듈을 고치면 영향받는 상위 모듈 목록 |
 | `lnt map` | 모듈 목록, 층, 의존 한눈에 |
-| `lnt doc` | 전체 목록과 층별 시그니처 문서 자동 생성 |
+| `lnt sig [대상]` | 층이나 모듈의 공개 시그니처. 저장하지 않고 그 자리에서 계산 |
+| `lnt doc` | 모듈 지도(`for-agent-layerinfo.md`) 생성 |
 | `lnt doc --check` | 문서가 코드와 어긋났는지 검사 |
 | `lnt move MODULE lK` | 모듈을 다른 층으로 옮기고 import 경로, 테스트, 문서를 전부 갱신 |
 
@@ -96,13 +96,9 @@ lnt init
 
 ```
 my-project/
-  CLAUDE.md                                   # 없을 때만 생성. 프로토콜 문서를 참조
+  CLAUDE.md                                   # 없을 때만 생성. 프로토콜 문서를 가리킴
   .claude/
-    for-agent-codingprotocol-ln-structure.md  # 구조 규칙
-    for-agent-codingprotocol-python.md        # Python 코딩 규칙
-    for-agent-layerinfo-template.md           # 문서 템플릿 3종
-    for-agent-layerinfo-ln-template.md
-    for-agent-moduleinfo-template.md
+    for-agent-codingprotocol-ln-structure.md  # 규칙. 세션마다 넣지 않고 필요할 때 읽는다
     settings.json                             # Claude Code 훅. 기존 설정이 있으면 hooks 만 병합
 ```
 
@@ -140,26 +136,27 @@ lnt map            # 구조 확인
 - **SessionStart**: 세션이 시작될 때 `for-agent-layerinfo.md`(전체 모듈 목록)를 에이전트 컨텍스트에 넣는다.
   에이전트가 grep 부터 시작하지 않고 구조를 알고 시작한다
 - **PostToolUse**: 에이전트가 `src/**/*.py` 를 편집할 때마다 실행된다
-  - 규칙 위반이 있으면 **exit 2 + stderr**. 에이전트에게 오류로 전달되어 고치기 전에는 진행하지 못한다
-  - 위반이 없으면 영향 범위(`blast`)와 문서 stale 여부를 정보로 전달한다
+  - 규칙 위반이 있으면 **exit 2 + stderr**. 위반 종류별 해결 방법과 함께 에이전트에게 오류로 전달되어 고치기 전에는 진행하지 못한다
+  - 위반이 없으면 영향 범위(`blast`)와 모듈 지도 불일치(`lnt doc` 으로 해결)를 정보로 전달한다
 
 훅은 에이전트가 호출하는 것이 아니라 Claude Code 가 자동으로 실행한다. 에이전트가 "규칙을 잊어도" 검사된다.
 
 ## 5. 문서 체계
 
-| 파일 | 위치 | 내용 | 누가 쓰나 |
-|---|---|---|---|
-| `for-agent-layerinfo.md` | 패키지 루트 | 층별 모듈 목록과 한 줄 설명 | 목록은 `lnt doc`, 설명은 사람 |
-| `for-agent-layerinfo-lN.md` | 각 층 | 공개 클래스의 메서드 시그니처와 정의 파일 | `lnt doc` |
-| `for-agent-moduleinfo.md` | 각 모듈 | 동작, 예외, 설계 이유 | 사람. `sources` 헤더의 hash 로 stale 판정 |
+저장하는 문서는 패키지 루트의 `for-agent-layerinfo.md` 하나다(중첩 모듈은 그 안에 하나씩).
+층별 모듈 목록과 모듈마다 책임 한 줄을 담는다. 목록은 `lnt doc` 이 `<!-- lnt:generated:start -->` 와 `end`
+마커 사이에서 맞추고, 책임 한 줄은 사람이 쓰며 다시 생성해도 보존된다. 마커 밖은 Notes 로 보존된다.
 
-생성 문서는 `<!-- lnt:generated:start -->` 와 `end` 마커 사이만 도구가 쓴다. 마커 밖은 자유롭게 써도 보존된다.
+시그니처는 저장하지 않는다. `lnt sig` 가 코드에서 그 자리에서 계산한다.
 
 ```
-## order
+$ lnt sig l1.order
+## l1.order
 Order.__init__(symbol: str, qty: float)  # order.py
 Order.fill(qty: float) -> None  # order.py
 ```
+
+모듈별 상세 문서는 없다. 코드를 읽는다. 코드만 보고 알 수 없는 것(설계 이유, 코드 밖 계약)은 Notes 에 짧게 쓴다.
 
 ## 6. 자주 나오는 질문
 

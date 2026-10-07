@@ -8,7 +8,10 @@ def test_run_creates_docs_claude_md_and_hooks(tmp_path: Path):
     lines = Initializer(tmp_path, home=tmp_path / "home").run()
     for name in PROTOCOL_FILES:
         assert (tmp_path / ".claude" / name).is_file()
-    assert (tmp_path / "CLAUDE.md").is_file()
+    assert sorted(p.name for p in (tmp_path / ".claude").glob("*.md")) == ["for-agent-codingprotocol-ln-structure.md"]
+    claude_md = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+    assert "for-agent-codingprotocol-ln-structure.md" in claude_md
+    assert "@." not in claude_md
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert "PostToolUse" in settings["hooks"]
     assert "SessionStart" in settings["hooks"]

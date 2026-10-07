@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 from lntools.l0.project_layout import ProjectLayout
+from lntools.l0.violation import Violation
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
 from lntools.l2.blaster import Blaster
@@ -19,7 +20,7 @@ class HookRunner:
         except json.JSONDecodeError:
             self.payload = {}
 
-    # SessionStart: 저해상도 문서를 stdout 으로. stdout 은 컨텍스트에 주입된다
+    # SessionStart: layerinfo 를 stdout 으로. stdout 은 컨텍스트에 주입된다
     def session_start(self) -> int:
         layout = ProjectLayout.find(self.cwd)
         if layout is None:
@@ -57,18 +58,17 @@ class HookRunner:
             sys.stderr.write("[lnt] ln-structure 위반. 수정 후 진행:\n")
             for v in violations:
                 sys.stderr.write("  " + v.format(layout.project_root) + "\n")
+            for h in Violation.hints(violations):
+                sys.stderr.write(h + "\n")
             return 2
         inner = chain[-1]
         lines = [f"[lnt] {inner.name} (l{inner.layer}) 편집. 위반 없음."]
         blaster = Blaster(graph)
         for m in chain:
             lines.extend(blaster.lines(m.name))
-        docs = DocGenerator(layout, graph)
-        layers = {m.layer_name for m in chain}
-        for d in docs.check(layers):
+        scopes = {m.scope for m in chain}
+        for d in DocGenerator(layout, graph).check(scopes):
             lines.append(f"문서 불일치: {d}. lnt doc 으로 재생성")
-        for m in chain:
-            lines.extend(docs.stale(m.name))
-        out = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}}
+        out ={"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}}
         sys.stdout.write(json.dumps(out, ensure_ascii=False))
         return 0

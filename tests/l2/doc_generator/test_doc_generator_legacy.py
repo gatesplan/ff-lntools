@@ -23,5 +23,5 @@ def test_stamp_all(layout: ProjectLayout, graph: Graph):
     docs.moduleinfo_path("l2.report").write_text("# report\n", encoding="utf-8")
     done = docs.stamp_all()
     assert len(done) == 2
-    assert docs.stale("l1.order") == []
-    assert docs.stale("l2.report") == []
+    assert docs.moduleinfo_path("l1.order").read_text(encoding="utf-8").startswith("---\nsources:\n  order.py: ")
+    assert docs.moduleinfo_path("l2.report").read_text(encoding="utf-8").startswith("---\nsources:\n  report.py: ")

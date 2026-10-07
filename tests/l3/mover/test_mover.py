@@ -67,7 +67,7 @@ def test_tests_mirror_moves_and_is_rewritten(layout: ProjectLayout, graph: Graph
 def test_move_into_new_layer_creates_init_and_docs(layout: ProjectLayout, graph: Graph):
     Mover(layout, graph).move("l4.app", "l5")
     assert (layout.package_root / "l5" / "__init__.py").is_file()
-    assert (layout.package_root / "l5" / "for-agent-layerinfo-l5.md").is_file()
+    assert "## l5\n- app:" in (layout.package_root / "for-agent-layerinfo.md").read_text(encoding="utf-8")
 
 
 def test_move_errors(layout: ProjectLayout, graph: Graph):

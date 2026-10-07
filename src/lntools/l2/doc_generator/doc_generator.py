@@ -3,21 +3,20 @@ import re
 from pathlib import Path
 
 from lntools.l0.project_layout import LAYER_RE, ProjectLayout
-from lntools.l0.signature_extractor import SignatureExtractor
 from lntools.l1.graph import Graph
 
 START = "<!-- lnt:generated:start -->"
 END = "<!-- lnt:generated:end -->"
 DESC_RE = re.compile(r"^- ([A-Za-z_][\w]*):\s*(.*)$")
 NEED_DESC = "[설명 필요]"
+OBSOLETE_GLOB = "for-agent-layerinfo-l*.md"
 
 
-# layerinfo(저해상도), layerinfo-ln(중해상도) 생성과 검사. moduleinfo(고해상도) hash 검사
+# layerinfo 생성과 검사. 시그니처는 문서로 두지 않는다(lnt sig). moduleinfo stamp 는 예전 프로젝트 호환으로만 남긴다
 class DocGenerator:
     def __init__(self, layout: ProjectLayout, graph: Graph):
         self.layout = layout
         self.graph = graph
-        self.sig = SignatureExtractor()
         self.notices: list[str] = []
 
     # ---- 경로 ----
@@ -32,15 +31,17 @@ class DocGenerator:
         names = {m.layer_name for m in self.graph.modules.values() if m.scope == scope}
         return sorted(names, key=lambda ln: int(LAYER_RE.match(ln.rsplit(".", 1)[-1]).group(1)))
 
-    def _layer_dir(self, layer_name: str) -> Path:
-        scope = layer_name.rsplit(".", 1)[0] if "." in layer_name else ""
-        return self._scope_dir(scope) / layer_name.rsplit(".", 1)[-1]
-
     def layerinfo_path(self, scope: str) -> Path:
         return self._scope_dir(scope) / "for-agent-layerinfo.md"
 
-    def layerinfo_ln_path(self, layer_name: str) -> Path:
-        return self._layer_dir(layer_name) / f"for-agent-layerinfo-{layer_name.rsplit('.', 1)[-1]}.md"
+    # 예전 판이 층마다 만들던 시그니처 문서. 지금은 만들지 않고 지우지도 않는다
+    def obsolete_docs(self) -> list[Path]:
+        out: list[Path] = []
+        for scope in self._scopes():
+            for layer_name in self._layers(scope):
+                layer_dir = self._scope_dir(scope) / layer_name.rsplit(".", 1)[-1]
+                out.extend(sorted(layer_dir.glob(OBSOLETE_GLOB)))
+        return out
 
     # ---- 생성 영역 ----
 
@@ -58,17 +59,6 @@ class DocGenerator:
             for m in mods:
                 desc = descs.get(m.basename, "") or NEED_DESC
                 parts.append(f"- {m.basename}: {desc}")
-            parts.append("")
-        return "\n".join(parts).rstrip("\n")
-
-    def layerinfo_ln_block(self, layer_name: str) -> str:
-        parts: list[str] = []
-        mods = sorted((m for m in self.graph.modules.values() if m.layer_name == layer_name), key=lambda x: x.name)
-        for m in mods:
-            parts.append(f"## {m.basename}")
-            exported = self.sig.exports_of(m.path)
-            lines = self.sig.extract(m.path, exported) if exported else ["(공개 이름 없음)"]
-            parts.extend(lines)
             parts.append("")
         return "\n".join(parts).rstrip("\n")
 
@@ -104,39 +94,28 @@ class DocGenerator:
         p = self.layerinfo_path(scope)
         return self._merge(self._read(p), "for-agent-layerinfo.md", self.layerinfo_block(scope), p)
 
-    def render_layerinfo_ln(self, layer_name: str) -> str:
-        p = self.layerinfo_ln_path(layer_name)
-        return self._merge(self._read(p), layer_name.rsplit(".", 1)[-1], self.layerinfo_ln_block(layer_name), p)
-
     def write_all(self) -> list[Path]:
         written: list[Path] = []
         for scope in self._scopes():
             p = self.layerinfo_path(scope)
             p.write_text(self.render_layerinfo(scope), encoding="utf-8")
             written.append(p)
-            for layer_name in self._layers(scope):
-                q = self.layerinfo_ln_path(layer_name)
-                q.write_text(self.render_layerinfo_ln(layer_name), encoding="utf-8")
-                written.append(q)
+        for p in self.obsolete_docs():
+            self.notices.append(f"{self.layout.relative(p)}: 더 이상 만들지 않는 문서. 시그니처는 lnt sig 로 본다. Notes 에 남길 내용이 없으면 지워도 된다")
         return written
 
-    # 생성 영역이 현재 파일과 다른 문서 목록. layers 가 주어지면 그 층 문서만
-    def check(self, layers: set[str] | None = None) -> list[str]:
+    # 생성 영역이 현재 파일과 다른 layerinfo 목록. scopes 가 주어지면 그 스코프만
+    def check(self, scopes: set[str] | None = None) -> list[str]:
         out: list[str] = []
         for scope in self._scopes():
-            if layers is None:
-                cur = self.extract_block(self._read(self.layerinfo_path(scope)))
-                if cur != self.layerinfo_block(scope):
-                    out.append(self.layout.relative(self.layerinfo_path(scope)))
-            for layer_name in self._layers(scope):
-                if layers is not None and layer_name not in layers:
-                    continue
-                cur = self.extract_block(self._read(self.layerinfo_ln_path(layer_name)))
-                if cur != self.layerinfo_ln_block(layer_name):
-                    out.append(self.layout.relative(self.layerinfo_ln_path(layer_name)))
+            if scopes is not None and scope not in scopes:
+                continue
+            cur = self.extract_block(self._read(self.layerinfo_path(scope)))
+            if cur != self.layerinfo_block(scope):
+                out.append(self.layout.relative(self.layerinfo_path(scope)))
         return out
 
-    # ---- moduleinfo hash ----
+    # ---- moduleinfo hash: 예전 프로젝트 호환. 새 프로젝트는 쓰지 않는다 ----
 
     @staticmethod
     def _hash(p: Path) -> str:
@@ -148,42 +127,6 @@ class DocGenerator:
 
     def moduleinfo_path(self, name: str) -> Path:
         return self.graph.modules[name].path / "for-agent-moduleinfo.md"
-
-    @staticmethod
-    def _parse_sources(text: str) -> dict[str, str] | None:
-        if not text.startswith("---"):
-            return None
-        head = text.split("---", 2)
-        if len(head) < 3:
-            return None
-        out: dict[str, str] = {}
-        in_sources = False
-        for line in head[1].splitlines():
-            if line.strip() == "sources:":
-                in_sources = True
-                continue
-            if in_sources and line.startswith("  ") and ":" in line:
-                k, v = line.strip().split(":", 1)
-                out[k.strip()] = v.strip()
-            elif in_sources and line.strip():
-                in_sources = False
-        return out
-
-    # 반환: 문제 설명 목록. 비어있으면 최신
-    def stale(self, name: str) -> list[str]:
-        p = self.moduleinfo_path(name)
-        rel = self.layout.relative(p)
-        if not p.is_file():
-            return [f"{rel} 없음"]
-        recorded = self._parse_sources(p.read_text(encoding="utf-8"))
-        if recorded is None:
-            return [f"{rel} 에 sources 헤더 없음. lnt doc --stamp {name}"]
-        out: list[str] = []
-        for f in self._source_files(name):
-            h = self._hash(f)
-            if recorded.get(f.name) != h:
-                out.append(f"{rel} stale: {f.name} 변경됨. 내용 확인 후 lnt doc --stamp {name}")
-        return out
 
     # moduleinfo 가 있는 모든 모듈에 stamp. 반환: 처리한 경로
     def stamp_all(self) -> list[Path]:

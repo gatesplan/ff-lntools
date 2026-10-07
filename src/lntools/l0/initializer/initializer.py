@@ -4,10 +4,6 @@ from pathlib import Path
 
 PROTOCOL_FILES = [
     "for-agent-codingprotocol-ln-structure.md",
-    "for-agent-codingprotocol-python.md",
-    "for-agent-layerinfo-template.md",
-    "for-agent-layerinfo-ln-template.md",
-    "for-agent-moduleinfo-template.md",
 ]
 
 

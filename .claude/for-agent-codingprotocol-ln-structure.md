@@ -9,6 +9,7 @@ AI 생성 코드의 의존성 관리를 선형화하고, 계층의 목적 없이
    - 모든 단순 모듈은 `ln/modulename/` 폴더로 구성
    - 모든 중첩 모듈은 `ln/modulename/lm/submoudle_name` 폴더로 구성
    - __init__는 모듈이 공개하는 것만을 re-export 한다.
+   - 파일 하나에 클래스 하나, 클래스 하나에 책임 하나. 여러 개념을 한 모듈에 몰면 그 모듈이 허브가 되어 영향 범위(blast)가 무뎌진다.
 
 2. l0, l1, ... ln 층 규칙
    - 외부 라이브러리 의존이 없는 모듈 (표준 라이브러리만 허용)의 위치
@@ -43,7 +44,6 @@ src/fishfactory/
   ln/
     modulename/
       modulename.py
-      for-agent-moduleinfo.md
       __init__.py
 
 tests/
@@ -61,7 +61,6 @@ src/fishfactory/
       l0/
       l1/
       l2/
-      for-agent-moduleinfo.md
       __init__.py
 
 tests/
@@ -240,24 +239,41 @@ class App:
 import는 전부 아래로 흐르고, 런타임 호출은 Engine <-> Momentum 양방향이다.
 Engine과 Momentum은 같은 l2에 있으면서 서로를 모른다.
 
-## 3단계 해상도 문서 구조
+## 문서
+
+저장하는 문서는 `for-agent-layerinfo.md` 하나다. 나머지는 그 자리에서 조회하거나 코드를 읽는다.
 
 ```
-1. for-agent-layerinfo.md (저해상도)
-   위치: src/fishfactory/
-   내용: 전체 시스템 모듈 목록
+1. for-agent-layerinfo.md
+   위치: src/fishfactory/ (중첩 모듈은 그 모듈 폴더에 따로)
+   내용: 층별 모듈 목록과 모듈마다 책임 한 줄
+   세션 시작 훅이 넣어 준다
 
-2. for-agent-layerinfo-ln.md (중해상도)
-   위치: src/fishfactory/ln/
-   내용: 레벨별 모든 모듈 공개 메서드 시그니처
+2. 시그니처: 문서로 두지 않는다
+   lnt sig l1            # 층
+   lnt sig l1.order      # 모듈
+   lnt sig order         # 모듈 이름
 
-3. for-agent-moduleinfo.md (고해상도)
-   위치: src/fishfactory/ln/modulename/
-   내용: 모듈 상세 설명, 예외, 설계 이유
+3. 상세: 문서로 두지 않는다. 코드를 읽는다
 ```
 
-1, 2는 `lnt doc`이 생성한다. 마커 사이는 생성 영역이며 손으로 고치지 않는다.
-마커 밖은 Notes 영역으로 보존된다. 3은 사람이 쓰고 `sources` 헤더의 hash로 stale 여부만 도구가 판정한다.
+모듈 목록은 `lnt doc`이 마커 사이에 생성한다. 책임 한 줄은 사람이 마커 안의 각 줄에 쓰고, 다음 생성 때 보존된다.
+새 모듈은 `[설명 필요]`로 들어간다. 코드만 보고 알 수 없는 설계 이유와 코드 밖 계약은 마커 밖 Notes에 짧게 쓴다.
+
+```markdown
+# for-agent-layerinfo.md
+
+<!-- lnt:generated:start -->
+## l0
+- candle: 캔들 하나. 시고저종과 거래량
+## l1
+- order: 주문 객체. 체결과 취소 상태
+<!-- lnt:generated:end -->
+
+## Notes
+
+(자유 기술. 보존됨)
+```
 
 ## 도구 `lnt`
 
@@ -266,45 +282,38 @@ Engine과 Momentum은 같은 l2에 있으면서 서로를 모른다.
 ```
 lnt check [--file PATH]     # 층 방향, 표면 import, 층 일치, 모듈 간 순환 검사. 위반 시 exit 1
 lnt blast MODULE            # MODULE에 의존하는 상위 모듈 목록 (상속 경유 포함)
-lnt doc [--check]           # layerinfo, layerinfo-ln 생성 / 불일치 검사
-lnt doc --stamp MODULE      # moduleinfo의 sources hash 갱신
+lnt sig [TARGET ...]        # 층이나 모듈의 공개 시그니처. 없으면 전체
+lnt doc [--check]           # layerinfo 생성 / 불일치 검사
 lnt move MODULE lK          # 층 이동 + import 경로 재작성
 ```
 
-Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, `doc --check`를 실행해
-위반은 오류로, 영향 범위와 stale 문서는 정보로 세션에 주입한다.
+Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, layerinfo 검사를 실행해
+위반은 오류로, 영향 범위와 layerinfo 불일치는 정보로 세션에 주입한다.
 
 ## 전체 예시
 
 ```
 project/
   src/fishfactory/
-    for-agent-layerinfo.md                # 저해상도 (전체)
+    for-agent-layerinfo.md                # 모듈 목록과 책임
 
     l0/
-      for-agent-layerinfo-l0.md           # 중해상도 (l0)
       candle/
         candle.py
-        for-agent-moduleinfo.md           # 고해상도 (candle)
         __init__.py
       token/
         token.py
-        for-agent-moduleinfo.md           # 고해상도 (token)
         __init__.py
 
     l1/
-      for-agent-layerinfo-l1.md           # 중해상도 (l1)
       order/
         order.py
-        for-agent-moduleinfo.md           # 고해상도 (order)
         __init__.py
       pair/
         pair.py
-        for-agent-moduleinfo.md           # 고해상도 (pair)
         __init__.py
 
     l3/
-      for-agent-layerinfo-l3.md           # 중해상도 (l3)
       portfolio/
         l0/
           tick_snapshot.py
@@ -318,7 +327,7 @@ project/
         l3/
           portfolio.py
           __init__.py
-        for-agent-moduleinfo.md           # 고해상도 (portfolio)
+        for-agent-layerinfo.md            # portfolio 안의 모듈 목록과 책임
         __init__.py
 
   tests/
@@ -338,13 +347,13 @@ project/
       portfolio/
         test_portfolio.py
         test_integration.py
+```
 
 ## 파일 배치 규칙
 
 ### 소스 코드
 - 위치: `src/fishfactory/ln/modulename/`
 - 메인 파일: `modulename.py` (또는 중첩 Ln)
-- 문서: `for-agent-moduleinfo.md`
 - Export: `__init__.py`
 
 ### 테스트
@@ -353,15 +362,5 @@ project/
 - 구조: 소스 미러
 
 ### 문서
-
-#### 저해상도 (전체 시스템)
-- 위치: `src/fishfactory/for-agent-layerinfo.md`
-- 템플릿: `for-agent-layerinfo-template.md` 참조
-
-#### 중해상도 (레벨별 API)
-- 위치: `src/fishfactory/ln/for-agent-layerinfo-ln.md`
-- 템플릿: `for-agent-layerinfo-ln-template.md` 참조
-
-#### 고해상도 (모듈별 상세)
-- 위치: `src/fishfactory/ln/modulename/for-agent-moduleinfo.md`
-- 템플릿: `for-agent-moduleinfo-template.md` 참조
+- 위치: `src/fishfactory/for-agent-layerinfo.md`. 중첩 모듈은 그 모듈 폴더에 따로 둔다
+- 형식: 위 '문서' 절

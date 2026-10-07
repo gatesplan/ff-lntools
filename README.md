@@ -18,7 +18,6 @@ src/shop/
     candle/
       candle.py             # class Candle
       __init__.py           # from .candle import Candle
-      for-agent-moduleinfo.md
   l1/                       # depends on l0 only
     order/
       order.py              # class Order  (from shop.l0.candle import Candle)
@@ -46,7 +45,7 @@ Why.
 - Dependencies written by agents cannot tangle. Cycles are impossible by construction
 - The blast radius of a change is bounded to "layers above", and a tool can compute it exactly
 - Layers have no semantics, so there is no "is this a service or a util" debate. Add a dependency and the module moves up
-- Agents read three resolutions of docs (module map / per-layer signatures / per-module detail) and explore only as deep as needed
+- Agents start from the module map (one line of responsibility per module), query signatures with `lnt sig`, and read the code for detail
 
 Full rules (nested modules, mutual calls, dependency inversion, `__init__` patterns):
 [`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md) (Korean).
@@ -62,7 +61,8 @@ is checked and violations come back as errors.
 | `lnt check` | C1-C4. Exit 1 on violation |
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
 | `lnt map` | Modules, layers, dependencies at a glance |
-| `lnt doc` | Generate the module map and per-layer signature docs |
+| `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |
+| `lnt doc` | Generate the module map (`for-agent-layerinfo.md`) |
 | `lnt doc --check` | Exit 1 if docs drifted from code |
 | `lnt move MODULE lK` | Relocate a module and rewrite imports, tests mirror, layer `__init__`, docs |
 
@@ -96,13 +96,9 @@ Creates:
 
 ```
 my-project/
-  CLAUDE.md                                   # only if absent; references the protocol docs
+  CLAUDE.md                                   # only if absent; points to the protocol doc
   .claude/
-    for-agent-codingprotocol-ln-structure.md  # structure rules
-    for-agent-codingprotocol-python.md        # Python coding rules
-    for-agent-layerinfo-template.md           # three doc templates
-    for-agent-layerinfo-ln-template.md
-    for-agent-moduleinfo-template.md
+    for-agent-codingprotocol-ln-structure.md  # the rules; read when needed, not injected every session
     settings.json                             # Claude Code hooks; only "hooks" is merged if the file exists
 ```
 
@@ -140,26 +136,29 @@ When `lnt check` reports C3 ("declared l2, computed l1"), run `lnt move <module>
 - **SessionStart**: injects `for-agent-layerinfo.md` (the module map) into the agent's context, so it starts
   oriented instead of grepping
 - **PostToolUse**: runs after every edit to `src/**/*.py`
-  - Violations: **exit 2 + stderr**. The agent receives an error and cannot proceed until fixed
-  - No violations: the blast radius and doc staleness are returned as context
+  - Violations: **exit 2 + stderr**. The agent receives an error, with how to resolve each kind of violation, and cannot proceed until fixed
+  - No violations: the blast radius and module map drift (fix with `lnt doc`) are returned as context
 
 Hooks are executed by Claude Code itself, not by the agent. The check happens even if the agent "forgets" the rules.
 
 ## 5. Docs
 
-| File | Where | Content | Written by |
-|---|---|---|---|
-| `for-agent-layerinfo.md` | package root | modules per layer with a one-line description | list by `lnt doc`, descriptions by people |
-| `for-agent-layerinfo-lN.md` | each layer | public class method signatures and defining file | `lnt doc` |
-| `for-agent-moduleinfo.md` | each module | behavior, exceptions, design rationale | people; staleness detected via `sources` hashes |
+One stored doc: `for-agent-layerinfo.md` at the package root (and one inside each nested module).
+It lists modules per layer with one line of responsibility each. `lnt doc` keeps the list in sync between the
+`<!-- lnt:generated:start -->` and `end` markers; the responsibility lines are written by people and survive
+regeneration. Anything outside the markers is preserved as Notes.
 
-The tool writes only between `<!-- lnt:generated:start -->` and `end` markers. Anything outside is preserved.
+Signatures are not stored. `lnt sig` computes them from the code on the spot.
 
 ```
-## order
+$ lnt sig l1.order
+## l1.order
 Order.__init__(symbol: str, qty: float)  # order.py
 Order.fill(qty: float) -> None  # order.py
 ```
+
+There is no per-module doc; read the code. What code cannot tell (design reasons, contracts outside Python)
+goes briefly into the Notes area.
 
 ## 6. FAQ
 

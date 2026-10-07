@@ -18,14 +18,15 @@
 ## l2
 - blaster: blast 결과 텍스트 보고서
 - checker: C1 방향, C2 표면, C3 층 일치, C4 순환 검사
-- doc_generator: layerinfo/layerinfo-ln 생성과 검사, moduleinfo sources hash stamp/stale
+- doc_generator: layerinfo 생성과 검사. 예전 층별 문서 알림, moduleinfo stamp 는 호환용
+- signature_lister: lnt sig. 층이나 모듈의 공개 시그니처를 문서 없이 그 자리에서 계산
 
 ## l3
 - hook_runner: Claude Code 훅 진입. stdin JSON 해석, exit 2 / additionalContext 채널 선택
 - mover: lnt move. 모듈 층 이동, import 재작성, tests 미러, 층 __init__ 와 문서 재생성
 
 ## l4
-- cli: lnt 명령줄. check, blast, map, doc, hook
+- cli: lnt 명령줄. check, blast, map, sig, doc, move, hook, init
 <!-- lnt:generated:end -->
 
 ## Notes
