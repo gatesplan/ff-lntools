@@ -290,10 +290,10 @@ lnt doc [--check]           # layerinfo 생성 / 불일치 검사
 lnt move MODULE lK          # 층 이동 + import 경로 재작성
 ```
 
-Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, 우회 점검, layerinfo 검사를 실행해
-위반은 해결 방법과 함께 오류로, 영향 범위와 우회와 layerinfo 불일치는 정보로 세션에 주입한다.
+Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, layerinfo 검사를 실행해
+위반은 해결 방법과 함께 오류로, 영향 범위와 layerinfo 불일치는 정보로 세션에 주입한다.
 
-점검 대상은 판정이 아니라 질문이다.
+점검 대상(`lnt review`)은 판정이 아니라 질문이다. 정상인 경우가 많아 훅에는 넣지 않고 필요할 때 목록으로 본다.
 - 우회: M이 A를 쓰면서 A 아래의 B도 직접 쓴다. 그 일이 A의 책임이면 A로 옮기고, 다른 용도면 그대로 둔다
   (B가 l0이거나, M이 맨 위 층이거나, A의 공개 시그니처에 B의 이름이 나오면 조립이나 어휘로 보고 빼고 보인다)
 - 고아: 아무도 import하지 않는 모듈. 남길지 확인한다. 맨 위 층, 패키지 루트나 중첩 모듈 표면이 내보내는 모듈,

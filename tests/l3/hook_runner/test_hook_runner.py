@@ -41,7 +41,8 @@ def test_context_reports_layerinfo_drift_only(sample: Path, layout: ProjectLayou
     assert "문서 불일치" not in ctx
 
 
-def test_context_reports_bypass_of_edited_module(sample: Path, capsys):
+# 우회는 정상인 경우가 많아 편집마다 띄우지 않는다. lnt review 에서만 본다
+def test_context_has_no_bypass_lines(sample: Path, capsys):
     pkg = sample / "src/shop"
     for rel, body in [
         ("l2/ledger", "from shop.l1.order import Order\n\n\nclass Ledger:\n    def total(self) -> float:\n        return 0.0\n"),
@@ -53,7 +54,8 @@ def test_context_reports_bypass_of_edited_module(sample: Path, capsys):
         (d / "__init__.py").write_text(f"from .{d.name} import {d.name.capitalize()}\n", encoding="utf-8")
     HookRunner(_payload(pkg / "l3/audit/audit.py"), sample).post_edit()
     ctx = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
-    assert "점검(우회): l3.audit -> l1.order" in ctx
+    assert "[lnt] l3.audit (l3) 편집. 위반 없음." in ctx
+    assert "우회" not in ctx
 
 
 def test_non_python_or_outside_is_silent(sample: Path, capsys):
