@@ -15,6 +15,9 @@
 - 테스트: `tests/` 미러 구조. fixture 는 `tests/fixtures/sample` (의도된 위반 12건이 심어진 샘플)
 - 실행: `python -m pytest -q`, `python -m lntools check`, `python -m lntools doc --check`
 - 개발 env: conda `py312`. 배포는 py310, py312 양쪽에 `pip install -e .`
+- 0.3 이행 중: 공용 py310, py312 에는 0.3.0 직전 판(5b403ea)을 일부러 깔아 두었다. lnt 훅이 걸린 프로젝트들이 0.3 에 맞춰질 때까지
+  다시 설치하지 않는다(훅이 없는 프로젝트는 기다리지 않는다). 그동안 소스 판은 `PYTHONPATH=src python -m lntools ...` 로 돌린다.
+  옮기는 방법은 `MIGRATION.md`
 
 ## 추가 규칙
 

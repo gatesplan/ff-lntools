@@ -101,7 +101,8 @@ class DocGenerator:
 
     # 반환: 쓴 파일. layerinfo 는 늘 쓰고, __init__.py 는 내용이 달라진 것만 쓴다
     # 표면에서 빠질 이름이 아직 코드에 정의돼 있거나 __init__ 안에 코드가 있으면 그 __init__ 은 쓰지 않고 알린다.
-    # 그 이름을 쓰는 곳이나 그 코드가 사라지지 않게 하려는 것이다
+    # 그 이름을 쓰는 곳이나 그 코드가 사라지지 않게 하려는 것이다. 다른 모듈의 이름을 다시 내보내던 __init__ 은
+    # 쓰는 곳을 고쳐도 이름이 그 모듈에 남아 알림이 계속되므로, 파일을 지워 확인하면 다음 생성 때 쓴다
     def write_all(self) -> list[Path]:
         written: list[Path] = []
         for scope in self._scopes():
@@ -114,8 +115,9 @@ class DocGenerator:
             kept = self._still_defined(p)
             if kept:
                 self.notices.append(f"{self.layout.relative(p)}: 지울 수 없는 정의가 있어 쓰지 않음 ({', '.join(kept)}). "
-                                    "쓰는 곳을 표면 규칙에 맞게 고친 뒤 다시 lnt doc (함수와 상수는 클래스 안으로, __init__ 안 코드는 모듈 파일로, "
-                                    "아래 층 이름은 그 모듈 표면에서 import)")
+                                    "함수와 상수는 클래스 안으로, __init__ 안 코드는 모듈 파일로 옮기고, "
+                                    "이 경로로 import 하던 곳은 그 이름이 있는 모듈 표면에서 import 하게 고친다. "
+                                    "고친 뒤에도 이 알림이 나오면 이 파일을 지우고 다시 lnt doc")
                 continue
             p.write_text(text, encoding="utf-8")
             written.append(p)

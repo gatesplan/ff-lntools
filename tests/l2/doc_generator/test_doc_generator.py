@@ -85,6 +85,23 @@ def test_init_kept_while_dropped_name_still_defined(layout: ProjectLayout):
     assert "now" not in (d / "__init__.py").read_text(encoding="utf-8")
 
 
+# 아래 층 클래스를 다시 내보내던 루트는 쓰는 곳이 없어도 이름이 그 모듈에 남아 계속 쓰지 않는다.
+# 알림이 파일을 지우라고 안내하고, 지우면 다음 생성 때 맨 위 층 표면으로 쓴다
+def test_reexport_kept_until_file_removed(layout: ProjectLayout, graph: Graph):
+    root = layout.package_root / "__init__.py"
+    old = "from .l1.order import Order\n"
+    root.write_text(old, encoding="utf-8")
+    for _ in range(2):
+        docs = DocGenerator(layout, graph)
+        docs.write_all()
+        assert root.read_text(encoding="utf-8") == old
+    assert any("src/shop/__init__.py" in n and "Order" in n and "이 파일을 지우고" in n for n in docs.notices)
+    root.unlink()
+    DocGenerator(layout, graph).write_all()
+    text = root.read_text(encoding="utf-8")
+    assert '"App": "l4.app"' in text and "Order" not in text
+
+
 # __init__ 안에 직접 쓴 코드가 있으면 덮어쓰지 않는다 (예: 루트에 정의한 함수)
 def test_init_with_own_code_is_kept(layout: ProjectLayout, graph: Graph):
     root = layout.package_root / "__init__.py"

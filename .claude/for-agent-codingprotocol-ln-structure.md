@@ -80,6 +80,7 @@ tests/
 
 모든 `__init__.py`는 패키지 루트까지 `lnt doc`이 만든다. 손으로 고치지 않는다.
 지울 수 없는 정의가 있으면(표면에서 빠질 이름이 아직 코드에 있거나 `__init__` 안에 코드가 있으면) 그 파일은 쓰지 않고 알린다.
+쓰는 곳을 고친 뒤에도 알림이 남으면(다른 모듈의 이름을 다시 내보내던 경우) 그 파일을 지우고 다시 `lnt doc`을 돌린다.
 모듈을 새로 만들거나 공개 이름을 바꾸면 `lnt doc`을 돌린다. 안 돌리면 훅과 `lnt doc --check`가 알린다.
 모든 import는 상대 경로라 모듈을 옮겨도(`lnt move`) 그대로다.
 
@@ -349,18 +350,16 @@ project/
         __init__.py
 
     l3/
-      portfolio/
+      portfolio/                          # 중첩 모듈. 안쪽 층에도 모듈 폴더를 둔다
         l0/
-          tick_snapshot.py
+          tick_snapshot/
+            tick_snapshot.py
+            __init__.py
           __init__.py
         l1/
-          file_backend.py
-          __init__.py
-        l2/
-          storage_l1.py
-          __init__.py
-        l3/
-          portfolio.py
+          store/
+            store.py
+            __init__.py
           __init__.py
         for-agent-layerinfo.md            # portfolio 안의 모듈 목록과 책임
         __init__.py
