@@ -83,3 +83,14 @@ def test_init_kept_while_dropped_name_still_defined(layout: ProjectLayout):
     modules, edges = Scanner(layout).scan()
     DocGenerator(layout, Graph(modules, edges)).write_all()
     assert "now" not in (d / "__init__.py").read_text(encoding="utf-8")
+
+
+# __init__ 안에 직접 쓴 코드가 있으면 덮어쓰지 않는다 (예: 루트에 정의한 함수)
+def test_init_with_own_code_is_kept(layout: ProjectLayout, graph: Graph):
+    root = layout.package_root / "__init__.py"
+    old = "def data_dir() -> str:\n    return 'x'\n"
+    root.write_text(old, encoding="utf-8")
+    docs = DocGenerator(layout, graph)
+    docs.write_all()
+    assert root.read_text(encoding="utf-8") == old
+    assert any("src/shop/__init__.py" in n and "data_dir" in n for n in docs.notices)

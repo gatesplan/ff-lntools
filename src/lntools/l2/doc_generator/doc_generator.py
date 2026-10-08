@@ -22,6 +22,7 @@ class DocGenerator:
         self.graph = graph
         self.surface = surface if surface is not None else Surface(layout, graph.modules)
         self.notices: list[str] = []
+        self._defs: set[str] | None = None
 
     # ---- 경로 ----
 
@@ -99,7 +100,8 @@ class DocGenerator:
         return self._merge(self._read(p), "for-agent-layerinfo.md", self.layerinfo_block(scope), p)
 
     # 반환: 쓴 파일. layerinfo 는 늘 쓰고, __init__.py 는 내용이 달라진 것만 쓴다
-    # 표면에서 빠질 이름이 아직 코드에 정의돼 있으면 그 __init__ 은 쓰지 않고 알린다. 쓰는 곳이 깨지지 않게 하려는 것이다
+    # 표면에서 빠질 이름이 아직 코드에 정의돼 있거나 __init__ 안에 코드가 있으면 그 __init__ 은 쓰지 않고 알린다.
+    # 그 이름을 쓰는 곳이나 그 코드가 사라지지 않게 하려는 것이다
     def write_all(self) -> list[Path]:
         written: list[Path] = []
         for scope in self._scopes():
@@ -111,8 +113,9 @@ class DocGenerator:
                 continue
             kept = self._still_defined(p)
             if kept:
-                self.notices.append(f"{self.layout.relative(p)}: 표면에서 빠질 이름이 아직 코드에 있어 쓰지 않음 ({', '.join(kept)}). "
-                                    "클래스 안으로 옮기거나 지운 뒤 다시 lnt doc")
+                self.notices.append(f"{self.layout.relative(p)}: 지울 수 없는 정의가 있어 쓰지 않음 ({', '.join(kept)}). "
+                                    "쓰는 곳을 표면 규칙에 맞게 고친 뒤 다시 lnt doc (함수와 상수는 클래스 안으로, __init__ 안 코드는 모듈 파일로, "
+                                    "아래 층 이름은 그 모듈 표면에서 import)")
                 continue
             p.write_text(text, encoding="utf-8")
             written.append(p)
@@ -134,30 +137,53 @@ class DocGenerator:
             out.extend(self.stale_inits())
         return out
 
-    # 생성 결과와 다른 __init__.py. names 가 주어지면 그 모듈들의 __init__ 과 그 모듈들이 속한 층의 __init__ 만
+    # 생성 결과와 다른 __init__.py. names 가 주어지면 그 모듈들의 __init__, 그 모듈들이 속한 층의 __init__,
+    # 루트 맨 위 층 모듈이면 패키지 루트 __init__ 만
     def stale_inits(self, names: set[str] | None = None) -> list[str]:
         expected = self.surface.render()
         if names is not None:
+            root = self.layout.package_root / "__init__.py"
             wanted = set()
             for n in names:
                 m = self.graph.modules[n]
                 wanted |= {m.path / "__init__.py", self.surface.layer_dir(m.layer_name) / "__init__.py"}
+                if m in self._root_top():
+                    wanted.add(root)
             expected = {p: t for p, t in expected.items() if p in wanted}
         return sorted(self.layout.relative(p) for p, t in expected.items() if self._read(p) != t)
 
-    # 지금 __init__ 이 내보내는데 새 표면에는 없고, 아직 모듈 코드에 정의돼 있는 이름
+    def _root_top(self) -> list:
+        roots = [m for m in self.graph.modules.values() if m.scope == ""]
+        top = max((m.layer for m in roots), default=None)
+        return [m for m in roots if m.layer == top]
+
+    # 쓰면 사라지는 정의. 지금 __init__ 이 내보내는데 새 표면에는 없고 아직 패키지 어딘가에 정의된 이름,
+    # 그리고 __init__ 파일 안에 직접 정의된 코드(생성 형식이 쓰는 이름은 빼고)
     def _still_defined(self, init: Path) -> list[str]:
-        owners = [m for m in self.graph.modules.values() if m.path / "__init__.py" == init]
-        if owners:
-            new = set(self.surface.of_module(owners[0].name))
-        else:
-            owners = [m for m in self.graph.modules.values() if self.surface.layer_dir(m.layer_name) / "__init__.py" == init]
-            new = set(self.surface.of_layer(owners[0].layer_name)[0]) if owners else set()
-        dropped = set(self.surface.sig.layer_exports(init)) - new
-        defined: set[str] = set()
-        for m in owners:
-            defined |= self.surface.sig.defined_names(m.path)
-        return sorted(dropped & defined)
+        dropped = set(self.surface.sig.layer_exports(init)) - self._new_names(init)
+        own_code = self.surface.sig.file_defs(init) - {"__all__", "_EXPORTS", "__getattr__"}
+        return sorted((dropped & self._package_defs()) | own_code)
+
+    # 새로 만들 __init__ 이 내보낼 이름
+    def _new_names(self, init: Path) -> set[str]:
+        if init == self.layout.package_root / "__init__.py":
+            return set(self.surface.of_root())
+        for m in self.graph.modules.values():
+            if m.path / "__init__.py" == init:
+                return set(self.surface.of_module(m.name))
+        for ln in self.surface.layer_names():
+            if self.surface.layer_dir(ln) / "__init__.py" == init:
+                return set(self.surface.of_layer(ln)[0])
+        return set()
+
+    # 패키지 안 모든 모듈 파일의 최상위 정의. 빠질 이름이 어디서 오든(루트가 아래 층 이름을 내보내도) 잡기 위해 전체를 본다
+    def _package_defs(self) -> set[str]:
+        if self._defs is None:
+            self._defs = set()
+            for m in self.graph.modules.values():
+                if m.scope == "":
+                    self._defs |= self.surface.sig.defined_names(m.path)
+        return self._defs
 
     # 문법 오류로 표면을 읽지 못한 파일
     def unreadable_notices(self) -> list[str]:

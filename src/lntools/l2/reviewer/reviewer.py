@@ -148,8 +148,8 @@ class Reviewer:
 
     # ---- 쓰임 수집 ----
 
-    # 사람이 쓰는 패키지 루트 __init__ 이 내보내는 모듈. from .x import Y 와 지연 로드 _EXPORTS 값 둘 다 본다
-    # 중첩 모듈 표면은 맨 위 층이라 고아 판정에서 이미 빠진다
+    # 패키지 루트 __init__ 이 내보내는 모듈. from .x import Y 와 지연 로드 _EXPORTS 값 둘 다 본다
+    # 생성된 루트와 중첩 모듈 표면은 맨 위 층이라 고아 판정에서 이미 빠지고, 손으로 쓴 예전 루트도 읽기 위함이다
     def _init_uses(self) -> set[str]:
         tree = self._parse(self.layout.package_root / "__init__.py")
         out: set[str] = set()

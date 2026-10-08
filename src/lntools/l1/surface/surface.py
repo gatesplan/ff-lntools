@@ -25,8 +25,9 @@ def __getattr__(name: str):
 '''
 
 
-# 표면 계산과 __init__.py 생성. 패키지 루트 __init__ 은 사람이 쓴다
-# 단순 모듈: 자기 파일의 공개 클래스와 타입 별칭. 중첩 모듈: 안쪽 맨 위 층 모듈들의 표면. 층: 그 층 모듈들의 표면 합
+# 표면 계산과 __init__.py 생성
+# 단순 모듈: 자기 파일의 공개 클래스와 타입 별칭. 중첩 모듈: 안쪽 맨 위 층의 표면. 층: 그 층 모듈들의 표면 합
+# 패키지 루트: 맨 위 층의 표면. 패키지는 다른 프로젝트에 그대로 중첩 모듈로 들어갈 수 있으므로 규칙이 같다
 class Surface:
     def __init__(self, layout: ProjectLayout, modules: dict[str, ModuleRef]):
         self.layout = layout
@@ -46,14 +47,22 @@ class Surface:
             if not m.is_nested:
                 out = self.sig.public_names(m.path)
             else:
-                inner = [x for x in self.modules.values() if x.scope == name]
-                top = max((x.layer for x in inner), default=None)
-                for x in sorted(inner, key=lambda x: x.name):
-                    if x.layer == top:
-                        for n in self.of_module(x.name):
-                            out.setdefault(n, f"l{top}.{x.basename}")
+                out = self._top_layer_surface(name)
             self._cache[name] = out
         return self._cache[name]
+
+    # 패키지 루트 표면. 이름 -> 패키지 루트 기준 상대 경로 (l4.cli)
+    def of_root(self) -> dict[str, str]:
+        return self._top_layer_surface("")
+
+    # 스코프(루트는 "", 중첩 모듈은 그 이름)의 맨 위 층 표면. 층 안에서 겹치는 이름은 빠진다
+    def _top_layer_surface(self, scope: str) -> dict[str, str]:
+        layers = [m.layer for m in self.modules.values() if m.scope == scope]
+        if not layers:
+            return {}
+        top = f"l{max(layers)}"
+        names, _ = self.of_layer(f"{scope}.{top}" if scope else top)
+        return {n: f"{top}.{folder}" for n, folder in names.items()}
 
     # 층 표면. 반환: (이름 -> 모듈 폴더명, 겹치는 이름 -> 그 이름을 내놓는 모듈들). 겹치는 이름은 표면에서 뺀다
     def of_layer(self, layer_name: str) -> tuple[dict[str, str], dict[str, list[str]]]:
@@ -72,9 +81,9 @@ class Surface:
         scope, _, base = layer_name.rpartition(".")
         return (self.modules[scope].path if scope else self.layout.package_root) / base
 
-    # 만들어야 할 __init__.py 경로와 내용. 모듈이 없는 층 폴더는 빈 층 표면
+    # 만들어야 할 __init__.py 경로와 내용. 패키지 루트 포함. 모듈이 없는 층 폴더는 빈 층 표면
     def render(self) -> dict[Path, str]:
-        out: dict[Path, str] = {}
+        out: dict[Path, str] = {self.layout.package_root / "__init__.py": self._lazy("패키지 표면: 맨 위 층", self.of_root())}
         for d in [self.layout.package_root] + [m.path for m in self.modules.values() if m.is_nested]:
             for c in sorted(d.iterdir()):
                 if c.is_dir() and ProjectLayout.LAYER_RE.match(c.name):

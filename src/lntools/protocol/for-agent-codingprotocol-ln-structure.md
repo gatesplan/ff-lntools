@@ -11,7 +11,7 @@ AI 생성 코드의 의존성 관리를 선형화하고, 계층의 목적 없이
    - 객체 기반이다. 모듈이 공개하는 이름은 클래스와 타입 별칭(`Answer = Union[A, B]`)뿐이다.
      함수는 메서드로, 상수는 클래스 속성으로, 진입 함수 `main`은 진입 클래스의 메서드로 둔다.
      이름이나 파일 이름이 `_`로 시작하면 비공개다.
-   - `__init__.py`는 `lnt doc`이 만든다. 손으로 고치지 않는다 (패키지 루트 `__init__`만 사람이 쓴다).
+   - `__init__.py`는 패키지 루트까지 모두 `lnt doc`이 만든다. 손으로 고치지 않는다.
    - 파일 하나에 클래스 하나. 파일 이름이 그 세부 책임의 이름이 되어, 모듈 폴더만 봐도 무엇으로 이뤄졌는지 보인다.
    - 모듈 하나에 책임 하나. 여러 책임을 한 모듈에 몰면 그 모듈이 허브가 되어 영향 범위(blast)가 무뎌진다.
    - 모듈 안 파일 사이의 관계는 검사하지 않는다(순환 허용). 그 관계까지 검사가 필요해지면 중첩 모듈로 바꾼다. 중첩 안에서는 C1~C4가 걸린다.
@@ -78,7 +78,8 @@ tests/
 
 ## __init__.py 패턴
 
-패키지 루트를 뺀 모든 `__init__.py`는 `lnt doc`이 만든다. 손으로 고치지 않는다.
+모든 `__init__.py`는 패키지 루트까지 `lnt doc`이 만든다. 손으로 고치지 않는다.
+지울 수 없는 정의가 있으면(표면에서 빠질 이름이 아직 코드에 있거나 `__init__` 안에 코드가 있으면) 그 파일은 쓰지 않고 알린다.
 모듈을 새로 만들거나 공개 이름을 바꾸면 `lnt doc`을 돌린다. 안 돌리면 훅과 `lnt doc --check`가 알린다.
 모든 import는 상대 경로라 모듈을 옮겨도(`lnt move`) 그대로다.
 
@@ -141,20 +142,29 @@ from fishfactory.l1 import Order, Pair  # 레이어 단위 import. order, pair�
 
 ### 패키지 최상단 __init__.py
 
-사람이 쓴다. 패키지 루트의 `__init__.py`는 최상위 레이어의 메인 비즈니스 모듈만 노출한다.
-루트를 import하면 패키지 안 어느 모듈을 import해도 함께 실행되므로, 무거운 진입점이면 위 지연 로드 형식으로 쓴다.
+중첩 모듈과 같은 규칙이다. 맨 위 층 모듈들의 표면을 지연 로드로 공개한다.
+패키지는 다른 프로젝트에 그대로 중첩 모듈로 들어갈 수 있으므로 공개 규칙이 같아야 한다.
+지연 로드라 패키지 안 어느 모듈을 import해도 맨 위 층까지 끌려오지 않는다.
+`__main__.py`는 `__init__`이 아니라 실행 진입 스크립트라 `lnt doc`이 만들지 않는다. 진입 클래스의 메서드를 부른다.
 
 ```python
-# src/fishfactory/__init__.py
-
-from .l3.portfolio import Portfolio  # 최상위 파사드만
-
-__all__ = ['Portfolio']
+# src/fishfactory/__init__.py  (lnt doc 이 씀. 맨 위 층이 l3 이고 거기에 portfolio 가 있다. 위와 같은 지연 로드 형식)
+_EXPORTS = {
+    "Portfolio": "l3.portfolio",
+}
 ```
 
-**효과:**
 ```python
 from fishfactory import Portfolio  # 최단 경로 import
+```
+
+```python
+# src/fishfactory/__main__.py  (진입 스크립트. 코드로 둔다)
+import sys
+
+from .l3.portfolio import Portfolio
+
+sys.exit(Portfolio.main())
 ```
 
 ## 상위 층 호출이 필요할 때

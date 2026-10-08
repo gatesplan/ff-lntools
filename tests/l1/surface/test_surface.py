@@ -42,7 +42,8 @@ def test_render_formats(layout: ProjectLayout, graph: Graph):
     assert '"Order": "order",' in out[pkg / "l1" / "__init__.py"] and "def __getattr__" in out[pkg / "l1" / "__init__.py"]
     nested = out[pkg / "l3" / "portfolio" / "__init__.py"]
     assert '"Store": "l1.store",' in nested and "안쪽 맨 위 층" in nested
-    assert pkg / "__init__.py" not in out
+    root = out[pkg / "__init__.py"]
+    assert '"App": "l4.app",' in root and "패키지 표면: 맨 위 층" in root
 
 
 # 생성한 지연 로드 __init__ 이 실제로 import 된다
@@ -63,3 +64,8 @@ def test_unreadable_file_is_reported(layout: ProjectLayout):
     s = _surface(layout)
     s.of_module("l0.candle")
     assert bad in s.unreadable
+
+
+# 패키지 루트 표면은 맨 위 층의 표면. 중첩 모듈과 같은 규칙
+def test_root_publishes_top_layer(layout: ProjectLayout, graph: Graph):
+    assert Surface(layout, graph.modules).of_root() == {"App": "l4.app"}

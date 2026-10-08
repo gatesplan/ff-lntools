@@ -31,14 +31,21 @@ class SignatureExtractor:
     def defined_names(self, module_dir: Path) -> set[str]:
         out: set[str] = set()
         for f in sorted(module_dir.rglob("*.py")):
-            tree = self._parse(f) if f.name != "__init__.py" else None
-            for node in tree.body if tree else []:
-                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                    out.add(node.name)
-                elif isinstance(node, ast.Assign):
-                    out |= {t.id for t in node.targets if isinstance(t, ast.Name)}
-                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                    out.add(node.target.id)
+            if f.name != "__init__.py":
+                out |= self.file_defs(f)
+        return out
+
+    # 파일 하나의 최상위에 정의된 이름
+    def file_defs(self, f: Path) -> set[str]:
+        out: set[str] = set()
+        tree = self._parse(f) if f.is_file() else None
+        for node in tree.body if tree else []:
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                out.add(node.name)
+            elif isinstance(node, ast.Assign):
+                out |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                out.add(node.target.id)
         return out
 
     # 층 __init__ 의 공개 이름 -> 모듈 폴더명. from .x import Y 와 _EXPORTS 딕셔너리 둘 다 지원

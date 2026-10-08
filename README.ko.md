@@ -63,7 +63,7 @@ tests/
 | `lnt map` | 모듈 목록, 층, 의존 한눈에 |
 | `lnt sig [대상]` | 층이나 모듈의 공개 시그니처. 저장하지 않고 그 자리에서 계산 |
 | `lnt review` | 위반은 아니지만 볼 만한 것: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 중첩 모듈의 숨은 타입 노출. 항상 exit 0 |
-| `lnt doc` | 모듈 지도(`for-agent-layerinfo.md`)와 패키지 루트를 뺀 모든 `__init__.py`(모듈 표면, 층 표면) 생성 |
+| `lnt doc` | 모듈 지도(`for-agent-layerinfo.md`)와 패키지 루트까지 모든 `__init__.py`(모듈, 층, 패키지 표면) 생성 |
 | `lnt doc --check` | 문서가 코드와 어긋났는지 검사 |
 | `lnt move MODULE lK` | 모듈을 다른 층으로 옮기고 import 경로, 테스트, 문서를 전부 갱신 |
 
