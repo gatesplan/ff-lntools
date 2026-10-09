@@ -3,6 +3,7 @@ import importlib
 # 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {
     "HookRunner": "hook_runner",
+    "MapExporter": "map_exporter",
     "Mover": "mover",
 }
 __all__ = list(_EXPORTS)

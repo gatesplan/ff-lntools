@@ -24,6 +24,7 @@
 
 ## l3
 - hook_runner: Claude Code 가 편집하는 순간에 lnt 의 판단을 전한다
+- map_exporter: 모듈 지도를 기계가 읽을 형태로 내놓는다
 - mover: 모듈을 다른 층으로 옮겨도 프로젝트가 그대로 동작하게 한다
 
 ## l4

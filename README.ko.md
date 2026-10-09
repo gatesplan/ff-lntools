@@ -61,7 +61,7 @@ tests/
 | `lnt init` | 프로젝트에 프로토콜 문서, `CLAUDE.md`, Claude Code 훅 설치 |
 | `lnt check` | C1~C5 검사와 문법 오류 파일. 위반 시 exit 1 |
 | `lnt blast MODULE` | 이 모듈을 고치면 영향받는 상위 모듈 목록 |
-| `lnt map` | 모듈 목록, 층, 의존 한눈에 |
+| `lnt map [--json]` | 모듈 목록, 층, 의존 한눈에. `--json` 은 모듈, 간선, 위반, 고아를 지도 그리는 도구용 JSON 으로 |
 | `lnt sig [대상]` | 층이나 모듈의 공개 시그니처. 저장하지 않고 그 자리에서 계산 |
 | `lnt review` | 위반은 아니지만 볼 만한 것: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 중첩 모듈의 숨은 타입 노출. 항상 exit 0 |
 | `lnt doc` | 모듈 지도(`for-agent-layerinfo.md`)와 패키지 루트까지 모든 `__init__.py`(모듈, 층, 패키지 표면) 생성 |

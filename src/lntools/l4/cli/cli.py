@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from ...l2.doc_generator import DocGenerator
 from ...l2.reviewer import Reviewer
 from ...l2.signature_lister import SignatureLister
 from ...l3.hook_runner import HookRunner
+from ...l3.map_exporter import MapExporter
 from ...l3.mover import Mover
 
 
@@ -39,6 +41,7 @@ class Cli:
         d.add_argument("--stamp", metavar="MODULE", help="예전 moduleinfo 의 sources hash 갱신 (호환용). all 이면 문서가 있는 모든 모듈")
 
         m = sub.add_parser("map", help="모듈 목록과 층")
+        m.add_argument("--json", action="store_true", help="모듈, 간선, 위반, 고아를 기계가 읽을 JSON 으로 (UTF-8)")
 
         s = sub.add_parser("sig", help="공개 시그니처 조회. 문서로 두지 않고 그 자리에서 계산")
         s.add_argument("targets", nargs="*", help="층(l1), 모듈(l1.order), 모듈 이름(order). 없으면 전체")
@@ -114,6 +117,13 @@ class Cli:
             lister = SignatureLister(layout, graph)
             print(lister.report(args.targets))
             return 1 if lister.missing else 0
+
+        if args.cmd == "map" and args.json:
+            # 받는 쪽은 UTF-8 로 읽는다. 콘솔 로케일과 무관하게 고정
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8")
+            print(json.dumps(MapExporter(layout, graph).data(), ensure_ascii=False, indent=1))
+            return 0
 
         if args.cmd == "map":
             for name in sorted(modules, key=lambda n: (modules[n].scope, modules[n].layer, n)):

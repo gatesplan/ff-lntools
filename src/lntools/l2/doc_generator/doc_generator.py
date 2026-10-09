@@ -9,6 +9,7 @@ from ...l1.surface import Surface
 START = "<!-- lnt:generated:start -->"
 END = "<!-- lnt:generated:end -->"
 DESC_RE = re.compile(r"^- ([A-Za-z_][\w]*):\s*(.*)$")
+LAYER_HEAD_RE = re.compile(r"^##\s+l(\d+)\b")
 NEED_DESC = "[설명 필요]"
 # 책임 한 줄을 채우는 순간에 보이는 기준. 자세한 것은 프로토콜 문서의 '문서' 절
 DESC_RULE = "무엇을 맡는지 쓴다. 어떻게 하는지(기능, 처리 단계, 함수 이름)는 쓰지 않는다"
@@ -189,6 +190,22 @@ class DocGenerator:
                 if m.scope == "":
                     self._defs |= self.surface.sig.defined_names(m.path)
         return self._defs
+
+    # 모듈 이름 -> 책임 한 줄. 비었거나 [설명 필요] 인 모듈은 빠진다
+    # 생성 표시가 없는 예전 손글씨 layerinfo 는 파일 전체에서 '## lN' 아래 '- 이름: 책임' 줄을 읽는다
+    def responsibilities(self) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for scope in self._scopes():
+            text = self._read(self.layerinfo_path(scope))
+            layer = None
+            for line in (self.extract_block(text) or text).splitlines():
+                if mh := LAYER_HEAD_RE.match(line.strip()):
+                    layer = f"l{mh.group(1)}"
+                elif (md := DESC_RE.match(line.strip())) and layer is not None:
+                    desc = md.group(2).strip()
+                    if desc and desc != NEED_DESC:
+                        out[f"{scope}.{layer}.{md.group(1)}" if scope else f"{layer}.{md.group(1)}"] = desc
+        return out
 
     # 책임 한 줄이 아직 비어 있는 모듈. 파일에 쓰인 layerinfo 기준. scopes 가 주어지면 그 스코프만
     def need_desc_notices(self, scopes: set[str] | None = None) -> list[str]:

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from lntools.l4.cli import Cli
@@ -30,3 +31,10 @@ def test_doc_writes_layerinfo_only(sample: Path, capsys):
     pkg = sample / "src" / "shop"
     assert (pkg / "for-agent-layerinfo.md").is_file()
     assert not list(pkg.rglob("for-agent-layerinfo-l*.md"))
+
+
+def test_map_json_is_utf8_json(sample: Path, capsysbinary):
+    assert Cli(["--root", str(sample), "map", "--json"]).run() == 0
+    data = json.loads(capsysbinary.readouterr().out.decode("utf-8"))
+    assert data["format"] == 1 and data["package"] == "shop"
+    assert any("선언" in v["message"] for v in data["violations"])
