@@ -1,7 +1,7 @@
 ---
 name: init-protocol
 description: 프로젝트에 Ln 구조 코딩 프로토콜 초기화. 새 프로젝트 시작 시 사용.
-version: 2.0.0
+version: 2.1.0
 user-invocable: true
 ---
 
@@ -12,16 +12,12 @@ user-invocable: true
 ## 실행
 
 ```bash
-if ! python -c "import lntools" 2>/dev/null; then
-    if [ "${CONDA_DEFAULT_ENV:-}" = "base" ] || [ -z "${CONDA_DEFAULT_ENV:-}${VIRTUAL_ENV:-}" ]; then
-        echo "lntools 없음. 활성 env 가 없거나 base 라 설치하지 않음."
-        echo "프로젝트 env 활성화 후: pip install ff-lntools"
-        exit 1
-    fi
-    echo "lntools 설치: $(python -c 'import sys; print(sys.executable)')"
-    python -m pip install -q ff-lntools
+if ! command -v lnt >/dev/null 2>&1; then
+    echo "lnt 없음. 어느 Python 환경에서든 잡히도록 사용자 bin 에 설치:"
+    echo "  uv tool install --python 3.14 ff-lntools   (또는 pipx install ff-lntools)"
+    exit 1
 fi
-python -m lntools init
+lnt init
 ```
 
 ## 이후

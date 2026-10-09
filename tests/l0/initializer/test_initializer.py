@@ -31,7 +31,7 @@ def test_existing_claude_md_and_settings_preserved(tmp_path: Path):
     assert settings["permissions"] == {"allow": ["Bash(ls)"]}
     cmds = [h["command"] for g in settings["hooks"]["PostToolUse"] for h in g["hooks"]]
     assert "echo x" in cmds
-    assert "python -m lntools hook post-edit" in cmds
+    assert "lnt hook post-edit" in cmds
 
 
 def test_run_twice_does_not_duplicate_hooks(tmp_path: Path):
@@ -40,6 +40,21 @@ def test_run_twice_does_not_duplicate_hooks(tmp_path: Path):
     ini.run()
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert len(settings["hooks"]["PostToolUse"]) == 1
+
+
+def test_legacy_hook_commands_replaced(tmp_path: Path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(json.dumps({"hooks": {
+        "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": "python -m lntools hook session-start"}]}],
+        "PostToolUse": [{"matcher": "Edit", "hooks": [{"type": "command", "command": "python -m lntools hook post-edit", "timeout": 30}]}],
+    }}), encoding="utf-8")
+    line = Initializer(tmp_path, home=tmp_path / "home").merge_hooks()
+    settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    cmds = [h["command"] for gs in settings["hooks"].values() for g in gs for h in g["hooks"]]
+    assert cmds == ["lnt hook session-start", "lnt hook post-edit"]
+    assert settings["hooks"]["PostToolUse"][0]["hooks"][0]["timeout"] == 30
+    assert "2개를 lnt 명령으로 바꿈" in line
+    assert "추가" not in line
 
 
 def test_install_skill(tmp_path: Path):

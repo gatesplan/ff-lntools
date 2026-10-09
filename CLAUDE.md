@@ -13,14 +13,13 @@
 
 - 소스: `src/lntools/l0..l4`. 모듈 목록은 `src/lntools/for-agent-layerinfo.md`
 - 테스트: `tests/` 미러 구조. fixture 는 `tests/fixtures/sample` (의도된 위반 12건이 심어진 샘플)
-- 실행: `python -m pytest -q`, `python -m lntools check`, `python -m lntools doc --check`
-- 개발 env: conda `py312`. 배포는 py310, py312 양쪽에 `pip install -e .`
-- 0.3 이행 중: 공용 py310, py312 에는 0.3.0 직전 판(5b403ea)을 일부러 깔아 두었다. lnt 훅이 걸린 프로젝트들이 0.3 에 맞춰질 때까지
-  다시 설치하지 않는다(훅이 없는 프로젝트는 기다리지 않는다). 그동안 소스 판은 `PYTHONPATH=src python -m lntools ...` 로 돌린다.
-  옮기는 방법은 `MIGRATION.md`
+- 실행: `python -m pytest -q`, `lnt check`, `lnt doc --check`. `lnt` 는 이 저장소의 편집 설치라 소스를 그대로 돈다
+- 개발 env: conda `py312`. 배포는 `uv tool install -e . --python 3.14` (사용자 bin 의 `lnt`). 훅은 `lnt hook ...` 으로 부른다
+- 이 셸의 `python` 은 conda env 를 활성화하지 않으면 Microsoft Store 바로가기다. 개발 명령은 py312 의 python 으로 돌린다
+- conda env 에는 lntools 를 깔지 않는다. 깔려 있으면 그 env 를 활성화했을 때 그쪽 `lnt` 가 먼저 잡힌다. 옮기는 방법은 `MIGRATION.md`
 
 ## 추가 규칙
 
 - fixture 의 위반 목록을 바꾸면 `tests/l2/checker/test_checker.py` 의 기대값을 같이 바꾼다
 - 출력 문자열은 ASCII 와 한글만. 훅 경로는 UTF-8 로 고정되어 있다
-- 문서 수정 후 `python -m lntools doc --check` 가 0 이어야 한다
+- 문서 수정 후 `lnt doc --check` 가 0 이어야 한다

@@ -18,6 +18,15 @@
      층마다의 `for-agent-layerinfo-lN.md` 는 lnt 가 더 만들지도 읽지도 않는다
    - 시그니처는 `lnt sig` 로 그 자리에서 본다. 위반이 아닌 점검 대상은 `lnt review` 로 본다
 
+## 훅 명령 (0.3.1)
+
+0.3.0 까지의 훅은 `python -m lntools hook ...` 이라 claude 를 띄운 셸에서 활성화된 python 에 lntools 가 있어야 돌았다.
+0.3.1 부터는 `lnt hook ...` 이고, lnt 는 `uv tool install --python 3.14 ff-lntools`(또는 `pipx install`)로 사용자 bin 에 깐다.
+
+1. `uv tool install --python 3.14 ff-lntools` 로 깐다. conda env 나 venv 에 깔린 lntools 는 지운다. 그 env 를 활성화하면 그쪽 `lnt` 가 먼저 잡힌다
+2. 프로젝트 루트에서 `lnt init` 을 다시 돌린다. `.claude/settings.json` 의 `python -m lntools hook X` 를 `lnt hook X` 로 바꾼다
+   - init 은 `.claude/for-agent-codingprotocol-ln-structure.md` 도 새 판으로 덮는다. 훅만 바꾸려면 settings.json 의 두 명령을 손으로 고친다
+
 ## 0.2 가 깔린 채로 옮기기
 
 lnt 명령은 모두 0.3 소스로 돌린다. 프로젝트 루트에서:

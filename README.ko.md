@@ -72,10 +72,13 @@ tests/
 ### 설치
 
 ```
-pip install ff-lntools
+uv tool install --python 3.14 ff-lntools
 ```
 
-프로젝트가 쓰는 Python 환경(venv, conda env)마다 설치한다. 훅이 `python -m lntools` 로 호출하기 때문이다.
+`lnt` 가 사용자 bin 폴더(`~/.local/bin`)에 생겨서 어느 Python 환경이 활성화돼 있든 잡힌다. `pipx install ff-lntools` 도 같다.
+훅이 `lnt` 로 호출하므로 프로젝트의 venv, conda env 마다 깔 필요는 없다.
+lnt 는 대상 코드를 import 하지 않고 `ast` 로 읽기만 한다. ast 는 lnt 를 돌리는 Python 판의 문법을 따르므로,
+프로젝트들이 쓰는 가장 높은 판 이상의 Python 을 고른다. `lnt` 가 PATH 에 없으면 훅은 "command not found" 로 실패한다.
 
 ### Claude Code 스킬 설치 (1회)
 
@@ -126,11 +129,11 @@ lnt map            # 구조 확인
   "hooks": {
     "SessionStart": [{
       "matcher": "startup|resume|clear|compact",
-      "hooks": [{"type": "command", "command": "python -m lntools hook session-start"}]
+      "hooks": [{"type": "command", "command": "lnt hook session-start"}]
     }],
     "PostToolUse": [{
       "matcher": "Edit|Write|MultiEdit",
-      "hooks": [{"type": "command", "command": "python -m lntools hook post-edit", "timeout": 30}]
+      "hooks": [{"type": "command", "command": "lnt hook post-edit", "timeout": 30}]
     }]
   }
 }
@@ -143,6 +146,8 @@ lnt map            # 구조 확인
   - 위반이 없으면 영향 범위(`blast`)와 모듈 지도 불일치(`lnt doc` 으로 해결)를 정보로 전달한다
 
 훅은 에이전트가 호출하는 것이 아니라 Claude Code 가 자동으로 실행한다. 에이전트가 "규칙을 잊어도" 검사된다.
+
+0.3.1 전에 세팅한 프로젝트의 훅은 `python -m lntools hook ...` 이라 활성화된 Python 에 기댄다. `lnt init` 을 다시 돌리면 `lnt hook ...` 으로 바뀐다.
 
 ## 5. 문서 체계
 

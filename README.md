@@ -72,10 +72,13 @@ is checked and violations come back as errors.
 ### Install
 
 ```
-pip install ff-lntools
+uv tool install --python 3.14 ff-lntools
 ```
 
-Install into every Python environment (venv, conda env) a project uses; the hook calls `python -m lntools`.
+This puts `lnt` in your user bin folder (`~/.local/bin`), so it is found whichever Python environment is active.
+`pipx install ff-lntools` works the same way. The hooks call `lnt`, so there is no need to install it into each project's venv or conda env.
+lnt never imports the target code; it only parses it with `ast`, which follows the grammar of the Python running lnt.
+Pick a Python at least as new as the newest one your projects use. If `lnt` is not on PATH, the hooks fail with "command not found".
 
 ### Install the Claude Code skill (once)
 
@@ -126,11 +129,11 @@ When `lnt check` reports C3 ("declared l2, computed l1"), run `lnt move <module>
   "hooks": {
     "SessionStart": [{
       "matcher": "startup|resume|clear|compact",
-      "hooks": [{"type": "command", "command": "python -m lntools hook session-start"}]
+      "hooks": [{"type": "command", "command": "lnt hook session-start"}]
     }],
     "PostToolUse": [{
       "matcher": "Edit|Write|MultiEdit",
-      "hooks": [{"type": "command", "command": "python -m lntools hook post-edit", "timeout": 30}]
+      "hooks": [{"type": "command", "command": "lnt hook post-edit", "timeout": 30}]
     }]
   }
 }
@@ -143,6 +146,8 @@ When `lnt check` reports C3 ("declared l2, computed l1"), run `lnt move <module>
   - No violations: the blast radius and module map drift (fix with `lnt doc`) are returned as context
 
 Hooks are executed by Claude Code itself, not by the agent. The check happens even if the agent "forgets" the rules.
+
+Projects set up before 0.3.1 have `python -m lntools hook ...` hooks, which depend on the active Python. Run `lnt init` again and they become `lnt hook ...`.
 
 ## 5. Docs
 

@@ -7,6 +7,8 @@ class Initializer:
     PROTOCOL_FILES = [
         "for-agent-codingprotocol-ln-structure.md",
     ]
+    # 0.3 까지의 훅 명령. 활성화된 python 에 기대므로 lnt 로 바꾼다
+    LEGACY_HOOK_PREFIX = "python -m lntools hook "
 
     def __init__(self, project_root: Path, home: Path | None = None):
         self.project_root = project_root
@@ -33,12 +35,20 @@ class Initializer:
         done.append(self.merge_hooks())
         return done
 
-    # settings.json 의 hooks 에 템플릿 훅을 합친다. 같은 command 가 이미 있으면 건너뛴다
+    # settings.json 의 hooks 에 템플릿 훅을 합친다. 옛 훅 명령은 lnt 로 바꾸고, 같은 command 가 이미 있으면 건너뛴다
     def merge_hooks(self) -> str:
         tpl = json.loads(self._protocol("settings-hooks-template.json"))
         dst = self.claude_dir / "settings.json"
         cur = json.loads(dst.read_text(encoding="utf-8")) if dst.is_file() else {}
         hooks = cur.setdefault("hooks", {})
+        replaced = 0
+        for groups in hooks.values():
+            for g in groups:
+                for h in g.get("hooks", []):
+                    cmd = h.get("command", "")
+                    if cmd.startswith(self.LEGACY_HOOK_PREFIX):
+                        h["command"] = "lnt hook " + cmd[len(self.LEGACY_HOOK_PREFIX):]
+                        replaced += 1
         added = 0
         for event, groups in tpl["hooks"].items():
             existing = hooks.setdefault(event, [])
@@ -48,7 +58,12 @@ class Initializer:
                     existing.append(g)
                     added += 1
         dst.write_text(json.dumps(cur, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        return f".claude/settings.json 훅 {added}개 추가" if added else ".claude/settings.json 훅 이미 있음"
+        done = []
+        if replaced:
+            done.append(f"{replaced}개를 lnt 명령으로 바꿈")
+        if added:
+            done.append(f"{added}개 추가")
+        return f".claude/settings.json 훅 {', '.join(done)}" if done else ".claude/settings.json 훅 이미 있음"
 
     # ~/.claude/skills/init-protocol/SKILL.md 설치
     def install_skill(self) -> Path:
