@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from lntools.l0.edge import Edge
-from lntools.l0.module_ref import ModuleRef
+from ...l0.edge import Edge
+from ...l0.module_ref import ModuleRef
 
 
 # 모듈 그래프. 층 계산, 역의존, 순환 탐지

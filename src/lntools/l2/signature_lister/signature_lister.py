@@ -1,8 +1,8 @@
-from lntools.l0.module_ref import ModuleRef
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l0.signature_extractor import SignatureExtractor
-from lntools.l1.graph import Graph
-from lntools.l1.surface import Surface
+from ...l0.module_ref import ModuleRef
+from ...l0.project_layout import ProjectLayout
+from ...l0.signature_extractor import SignatureExtractor
+from ...l1.graph import Graph
+from ...l1.surface import Surface
 
 
 # lnt sig. 층이나 모듈의 공개 시그니처를 문서로 두지 않고 그 자리에서 계산한다

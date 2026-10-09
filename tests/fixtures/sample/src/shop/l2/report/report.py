@@ -1,10 +1,10 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from shop.l1 import Order
+from ...l1 import Order
 
 if TYPE_CHECKING:
-    from shop.l1.wallet import Wallet
+    from ...l1.wallet import Wallet
 
 
 class Report:

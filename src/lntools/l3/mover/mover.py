@@ -3,12 +3,12 @@ import re
 import shutil
 from pathlib import Path
 
-from lntools.l0.module_ref import ModuleRef
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l1.graph import Graph
-from lntools.l1.scanner import Scanner
-from lntools.l1.surface import Surface
-from lntools.l2.doc_generator import DocGenerator
+from ...l0.module_ref import ModuleRef
+from ...l0.project_layout import ProjectLayout
+from ...l1.graph import Graph
+from ...l1.scanner import Scanner
+from ...l1.surface import Surface
+from ...l2.doc_generator import DocGenerator
 
 
 # 모듈을 다른 층으로 옮기고 import 경로, 테스트 미러, __init__, 문서를 맞춘다
@@ -89,6 +89,8 @@ class Mover:
         new_layer_abs = f"{self.pkg}.{new_layer}"
         inside_moved = m.path in f.parents
         file_pkg = self._package_of(f)
+        # 다시 쓰는 import 는 이동 후 파일 위치 기준 상대 경로. 옮기는 모듈 안 파일은 새 위치가 기준이다
+        new_pkg = new_abs + file_pkg[len(old_abs):] if inside_moved and file_pkg else file_pkg
         lines = src.splitlines(keepends=True)
         edits: list[tuple[int, int, str]] = []   # (start_line, end_line, replacement) 1-based inclusive
 
@@ -126,20 +128,21 @@ class Mover:
                 if relative and inside_moved:
                     continue   # 모듈 내부 상대 import 는 이동 후에도 유효
                 new_target = new_abs + target[len(old_abs):]
-                edits.append((node.lineno, node.end_lineno, self._from_stmt(new_target, node.names)))
+                edits.append((node.lineno, node.end_lineno, self._from_stmt(new_target, node.names, new_pkg)))
                 continue
             # (b) 층 단위 import 에서 옮기는 모듈의 공개 이름을 가져옴
             if target == old_layer_abs and exports & set(names):
                 moved = [a for a in node.names if a.name in exports]
                 rest = [a for a in node.names if a.name not in exports]
-                text = self._from_stmt(new_layer_abs, moved)
+                text = self._from_stmt(new_layer_abs, moved, new_pkg)
                 if rest:
-                    text = self._from_stmt(target if not relative else target, rest) + text
+                    text = self._from_stmt(target, rest, new_pkg) + text
                 edits.append((node.lineno, node.end_lineno, text))
                 continue
-            # (c) 옮기는 모듈 안에서 바깥 형제를 상대 import: 이동 후 깊이는 같지만 층이 바뀌므로 절대 경로로 고정
-            if relative and inside_moved and not target.startswith(old_abs):
-                edits.append((node.lineno, node.end_lineno, self._from_stmt(target, node.names)))
+            # (c) 옮기는 모듈 안에서 바깥을 상대 import: 새 위치에서 같은 대상을 가리키게 다시 쓴다.
+            # 같은 스코프 안 이동이라 깊이가 같아 대개 그대로 맞고, 달라질 때만 고친다
+            if relative and inside_moved and (node.level, node.module) != self._relative(new_pkg, target):
+                edits.append((node.lineno, node.end_lineno, self._from_stmt(target, node.names, new_pkg)))
 
         if not edits:
             return
@@ -150,6 +153,17 @@ class Mover:
         f.write_text("".join(lines), encoding="utf-8")
         self.changed.append(f"수정 {self.layout.relative(f)}")
 
+    # file_pkg 패키지의 파일에서 쓸 import 문. 패키지 밖 파일(tests)은 상대 import 를 쓸 수 없어 절대 경로
+    @classmethod
+    def _from_stmt(cls, target: str, aliases: list[ast.alias], file_pkg: str | None) -> str:
+        level, module = (0, target) if file_pkg is None else cls._relative(file_pkg, target)
+        return ast.unparse(ast.ImportFrom(module=module, names=list(aliases), level=level)) + "\n"
+
+    # 반환: (level, module). 예: shop.l2.service 에서 shop.l1.order 는 (3, "l1.order")
     @staticmethod
-    def _from_stmt(module: str, aliases: list[ast.alias]) -> str:
-        return ast.unparse(ast.ImportFrom(module=module, names=list(aliases), level=0)) + "\n"
+    def _relative(file_pkg: str, target: str) -> tuple[int, str | None]:
+        p, t = file_pkg.split("."), target.split(".")
+        k = 0
+        while k < min(len(p), len(t)) and p[k] == t[k]:
+            k += 1
+        return len(p) - k + 1, ".".join(t[k:]) or None

@@ -2,14 +2,16 @@ import hashlib
 import re
 from pathlib import Path
 
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l1.graph import Graph
-from lntools.l1.surface import Surface
+from ...l0.project_layout import ProjectLayout
+from ...l1.graph import Graph
+from ...l1.surface import Surface
 
 START = "<!-- lnt:generated:start -->"
 END = "<!-- lnt:generated:end -->"
 DESC_RE = re.compile(r"^- ([A-Za-z_][\w]*):\s*(.*)$")
 NEED_DESC = "[설명 필요]"
+# 책임 한 줄을 채우는 순간에 보이는 기준. 자세한 것은 프로토콜 문서의 '문서' 절
+DESC_RULE = "무엇을 맡는지 쓴다. 어떻게 하는지(기능, 처리 단계, 함수 이름)는 쓰지 않는다"
 OBSOLETE_GLOB = "for-agent-layerinfo-l*.md"
 
 
@@ -124,6 +126,7 @@ class DocGenerator:
         for p in self.obsolete_docs():
             self.notices.append(f"{self.layout.relative(p)}: 더 이상 만들지 않는 문서. 시그니처는 lnt sig 로 본다. Notes 에 남길 내용이 없으면 지워도 된다")
         self.notices.extend(self.unreadable_notices())
+        self.notices.extend(self.need_desc_notices())
         return written
 
     # 생성 결과와 다른 문서 목록. scopes 가 주어지면 그 스코프의 layerinfo 만, 없으면 __init__.py 까지 전부
@@ -186,6 +189,20 @@ class DocGenerator:
                 if m.scope == "":
                     self._defs |= self.surface.sig.defined_names(m.path)
         return self._defs
+
+    # 책임 한 줄이 아직 비어 있는 모듈. 파일에 쓰인 layerinfo 기준. scopes 가 주어지면 그 스코프만
+    def need_desc_notices(self, scopes: set[str] | None = None) -> list[str]:
+        out: list[str] = []
+        for scope in self._scopes():
+            if scopes is not None and scope not in scopes:
+                continue
+            p = self.layerinfo_path(scope)
+            block = self.extract_block(self._read(p)) or ""
+            names = [m.group(1) for line in block.splitlines()
+                     if (m := DESC_RE.match(line.strip())) and m.group(2).strip() == NEED_DESC]
+            if names:
+                out.append(f"책임 한 줄 필요: {', '.join(names)} ({self.layout.relative(p)}). {DESC_RULE}")
+        return out
 
     # 문법 오류로 표면을 읽지 못한 파일
     def unreadable_notices(self) -> list[str]:

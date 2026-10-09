@@ -22,8 +22,8 @@ def _review(layout: ProjectLayout) -> Reviewer:
 
 # ledger 는 Order 를 안에서만 쓰고, audit 은 ledger 를 쓰면서 Order 도 직접 쓴다
 def _ledger_and_audit(layout: ProjectLayout, ledger_sig: str) -> None:
-    _module(layout, "l2/ledger", f"from shop.l1.order import Order\n\n\nclass Ledger:\n{ledger_sig}")
-    _module(layout, "l3/audit", "from shop.l1.order import Order\nfrom shop.l2.ledger import Ledger\n\n\nclass Audit:\n    def run(self) -> None:\n        pass\n")
+    _module(layout, "l2/ledger", f"from ...l1.order import Order\n\n\nclass Ledger:\n{ledger_sig}")
+    _module(layout, "l3/audit", "from ...l1.order import Order\nfrom ...l2.ledger import Ledger\n\n\nclass Audit:\n    def run(self) -> None:\n        pass\n")
 
 
 def test_orphans_in_sample(layout: ProjectLayout, graph: Graph):

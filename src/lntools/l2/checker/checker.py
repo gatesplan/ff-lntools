@@ -1,9 +1,11 @@
-from lntools.l0.violation import Violation
-from lntools.l1.graph import Graph
-from lntools.l1.surface import Surface
+from pathlib import Path
+
+from ...l0.violation import Violation
+from ...l1.graph import Graph
+from ...l1.surface import Surface
 
 
-# C1 방향, C2 표면, C3 층 일치, C4 순환 검사
+# C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로 검사. 파싱에 실패한 파일은 E 로 먼저 알린다
 # C2 는 셋: 표면을 지나 들어간 import, 표면에 없는 이름을 import, 같은 층에서 겹치는 공개 이름
 class Checker:
     def __init__(self, graph: Graph, surface: Surface):
@@ -27,6 +29,14 @@ class Checker:
                 seen.add(key)
                 out.append(v)
 
+        # 파일 하나는 그것을 품은 모듈마다 기록되어 있다. 가장 안쪽 모듈로 한 번만 알린다
+        for m in sorted(g.modules.values(), key=lambda x: -len(x.name)):
+            for err in m.parse_errors:
+                add(("E", err.filename), Violation("E", m.name, Path(err.filename), err.lineno or 0,
+                    f"문법 오류: {err.msg}. 고칠 때까지 이 파일의 import 는 검사에서 빠진다"))
+            for f, line, target in m.absolute_imports:
+                add(("C5", f, line), Violation("C5", m.name, f, line,
+                    f"패키지 안 절대 import: {target}. 상대 경로로 쓴다"))
         for e in g.edges:
             src = g.modules[e.src]
             if e.counts_for_layer and e.dst_layer >= src.layer:
@@ -52,7 +62,7 @@ class Checker:
                         f"같은 층에서 공개 이름이 겹친다: {name} ({', '.join(owners)}). 한쪽 이름을 바꾼다"))
         for name, m in g.modules.items():
             computed = g.computed_layer(name)
-            if computed != m.layer:
+            if computed != m.layer and not m.parse_errors:
                 out.append(Violation("C3", name, m.path / "__init__.py", 0,
                                      f"선언 l{m.layer}, 계산 l{computed}. lnt move {name} l{computed}"))
         for cyc in g.cycles():
@@ -61,5 +71,5 @@ class Checker:
                                  "모듈 간 순환: " + " -> ".join(cyc + [cyc[0]])))
         if only is not None:
             out = [v for v in out if v.module in only]
-        order = {"C1": 0, "C2": 1, "C3": 2, "C4": 3}
+        order = {"E": -1, "C1": 0, "C2": 1, "C3": 2, "C4": 3, "C5": 4}
         return sorted(out, key=lambda v: (order[v.code], v.module, v.line))

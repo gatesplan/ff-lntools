@@ -2,11 +2,11 @@ import ast
 import sys
 from pathlib import Path
 
-from lntools.l0.edge import Edge
-from lntools.l0.module_ref import ModuleRef
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l0.raw_import import RawImport
-from lntools.l0.signature_extractor import SignatureExtractor
+from ...l0.edge import Edge
+from ...l0.module_ref import ModuleRef
+from ...l0.project_layout import ProjectLayout
+from ...l0.raw_import import RawImport
+from ...l0.signature_extractor import SignatureExtractor
 
 
 # src/<pkg>/ 를 훑어 모듈 목록과 의존 간선을 만든다
@@ -22,10 +22,18 @@ class Scanner:
     def scan(self) -> tuple[dict[str, ModuleRef], list[Edge]]:
         self._discover(self.layout.package_root, "")
         parsed: dict[Path, list[RawImport]] = {}
+        errors: dict[Path, SyntaxError] = {}
         for m in self.modules.values():
             for f in m.files:
                 if f not in parsed:
-                    parsed[f] = self._parse(f)
+                    try:
+                        parsed[f] = self._parse(f)
+                    except SyntaxError as e:
+                        parsed[f] = []
+                        errors[f] = e
+                if f in errors:
+                    m.parse_errors.append(errors[f])
+                m.absolute_imports.extend((f, raw.line, raw.target) for raw in parsed[f] if raw.absolute)
         # 파일은 자기를 포함하는 모든 모듈(외곽 중첩 모듈 포함)에 대해 각각 해석된다
         for m in sorted(self.modules.values(), key=lambda x: x.name):
             for f in m.files:
@@ -54,12 +62,10 @@ class Scanner:
                 if nested:
                     self._discover(mdir, name)
 
+    # 문법 오류는 SyntaxError 로 올린다. 호출한 쪽이 그 파일을 가진 모듈에 기록한다
     def _parse(self, file: Path) -> list[RawImport]:
         out: list[RawImport] = []
-        try:
-            tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
-        except SyntaxError:
-            return out
+        tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
         local_names: dict[str, str] = {}   # 로컬 이름 -> 절대 target (상속 간선 해석용)
         self._walk(tree, file, False, out, local_names)
         for node in ast.walk(tree):
@@ -115,7 +121,7 @@ class Scanner:
     def _absolute(self, dotted: str, file: Path, line: int, names: list[str], kind: str) -> RawImport:
         top = dotted.split(".")[0]
         if top == self.pkg:
-            return RawImport(dotted, names, kind, line)
+            return RawImport(dotted, names, kind, line, absolute=True)
         external = top not in self._stdlib and top != ""
         return RawImport(None, names, kind, line, external=external)
 
@@ -166,5 +172,16 @@ class Scanner:
                 folder = exports.get(nm)
                 dst = f"{layer_name}.{folder}" if folder and f"{layer_name}.{folder}" in self.modules else None
                 self.edges.append(Edge(m.name, dst, n, raw.kind, file, raw.line, f"{rel}.{nm}", via_layer=True))
+            return
+        # 자기를 품은 중첩 모듈의 표면: 표면이 내보내는 안쪽 모듈로 풀어 C1~C4 로 본다.
+        # 풀린 모듈이 이 스코프에 없으면 그 스코프에 있는 바깥 모듈이 같은 파일을 해석할 때 잡는다
+        if rel in self.modules and m.name.startswith(rel + "."):
+            top = max(x.layer for x in self.modules.values() if x.scope == rel)
+            top_layer = f"{rel}.l{top}"
+            exports = self._layer_exports.get(top_layer, {})
+            for nm in raw.names:
+                dst = f"{top_layer}.{exports[nm]}" if nm in exports else None
+                if dst in self.modules and dst != m.name and self.modules[dst].scope == m.scope:
+                    self.edges.append(Edge(m.name, dst, self.modules[dst].layer, raw.kind, file, raw.line, f"{rel}.{nm}", names=[nm]))
             return
         # 이 스코프 밖의 대상: 바깥 모듈이 따로 해석한다

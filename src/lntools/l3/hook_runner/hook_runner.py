@@ -2,14 +2,14 @@ import json
 import sys
 from pathlib import Path
 
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l0.violation import Violation
-from lntools.l1.graph import Graph
-from lntools.l1.scanner import Scanner
-from lntools.l1.surface import Surface
-from lntools.l2.blaster import Blaster
-from lntools.l2.checker import Checker
-from lntools.l2.doc_generator import DocGenerator
+from ...l0.project_layout import ProjectLayout
+from ...l0.violation import Violation
+from ...l1.graph import Graph
+from ...l1.scanner import Scanner
+from ...l1.surface import Surface
+from ...l2.blaster import Blaster
+from ...l2.checker import Checker
+from ...l2.doc_generator import DocGenerator
 
 
 # Claude Code 훅 진입. stdin JSON 을 읽고 exit code 와 출력 채널을 정한다
@@ -75,6 +75,7 @@ class HookRunner:
         for p in docs.stale_inits(names):
             lines.append(f"__init__ 불일치: {p}. lnt doc 으로 재생성")
         lines.extend(docs.unreadable_notices())
+        lines.extend(docs.need_desc_notices(scopes))
         out = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}}
         sys.stdout.write(json.dumps(out, ensure_ascii=False))
         return 0

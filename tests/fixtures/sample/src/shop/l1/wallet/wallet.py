@@ -1,6 +1,6 @@
 import requests
 
-from shop.l0.candle import Candle
+from ...l0.candle import Candle
 
 
 class Wallet:

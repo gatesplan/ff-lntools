@@ -40,3 +40,13 @@ def test_surface_violation_records_extra(graph: Graph):
     deep = [e for e in graph.dependencies("l2.deep")]
     assert deep[0].dst == "l1.order"
     assert deep[0].extra == "order"
+
+
+# 파싱에 실패한 파일은 그 파일을 품은 모듈마다 기록된다
+def test_parse_errors_recorded_on_containing_modules(layout):
+    from lntools.l1.scanner import Scanner
+    (layout.package_root / "l3/portfolio/l1/store/store.py").write_text("def broken(\n", encoding="utf-8")
+    modules, _ = Scanner(layout).scan()
+    for name in ["l3.portfolio", "l3.portfolio.l1.store"]:
+        assert [e.lineno for e in modules[name].parse_errors] == [1]
+    assert not modules["l3.portfolio.l0.tick_snapshot"].parse_errors

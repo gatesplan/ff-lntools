@@ -12,6 +12,8 @@ class ModuleRef:
     files: list[Path] = field(default_factory=list)   # 모듈에 속한 모든 .py (중첩 내부 포함)
     has_external: bool = False                         # 표준 라이브러리 외 패키지 import 여부
     is_nested: bool = False                            # 내부에 lN 디렉토리를 가지는지
+    parse_errors: list[SyntaxError] = field(default_factory=list)   # 파싱에 실패한 파일. 그 파일의 import 는 간선에 없다
+    absolute_imports: list[tuple[Path, int, str]] = field(default_factory=list)   # 자기 패키지 절대 import (파일, 줄, 경로)
 
     @property
     def basename(self) -> str:

@@ -1,3 +1,13 @@
+# 0.4: 패키지 안 import 는 상대 경로 (C5)
+
+0.4 부터 패키지 안에서 자기 패키지를 절대 경로로 import 하면 C5 위반이다(`from shop.l1.order import Order`).
+훅이 그 모듈을 편집할 때 막으니, 위반이 뜬 곳에서 상대 경로로 고친다.
+
+- `src/shop/l2/report/report.py` 에서 `from shop.l1.order import Order` 는 `from ...l1.order import Order`
+- 점의 수 = 파일이 든 패키지에서 공통 조상까지 올라가는 단계 + 1. 같은 층 모듈 폴더 깊이면 `...lK.module`
+- `tests/` 와 패키지 밖 스크립트는 그대로 절대 경로다
+- 문법 오류가 난 파일은 `[E]` 로 알린다. 고칠 때까지 그 모듈은 층 계산(C3)에서 빠진다
+
 # 0.2 에서 0.3 으로 옮기기
 
 0.2 에서 위반이 없던 프로젝트도 0.3 에서는 위반이 나고 `__init__.py` 가 바뀐다.

@@ -1,6 +1,6 @@
 import smtplib
 
-from shop.l0.notifier import Notifier
+from ...l0.notifier import Notifier
 
 
 class EmailNotifier(Notifier):

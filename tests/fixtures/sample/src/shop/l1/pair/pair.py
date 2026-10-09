@@ -1,4 +1,4 @@
-from shop.l1.order import Order
+from ..order import Order
 
 
 class Pair:

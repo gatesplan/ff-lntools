@@ -1,4 +1,4 @@
-from shop.l2.cyc_a import CycA
+from ..cyc_a import CycA
 
 
 class CycB:

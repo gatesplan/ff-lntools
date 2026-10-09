@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from lntools.l0.module_ref import ModuleRef
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l0.signature_extractor import SignatureExtractor
+from ...l0.module_ref import ModuleRef
+from ...l0.project_layout import ProjectLayout
+from ...l0.signature_extractor import SignatureExtractor
 
 MODULE_TEMPLATE = '''# 모듈 표면. lnt doc 이 생성한다
 {imports}__all__ = [{names}]

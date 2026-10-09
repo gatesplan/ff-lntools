@@ -2,19 +2,19 @@ import argparse
 import sys
 from pathlib import Path
 
-from lntools.l0.initializer import Initializer
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l0.violation import Violation
-from lntools.l1.graph import Graph
-from lntools.l1.scanner import Scanner
-from lntools.l1.surface import Surface
-from lntools.l2.blaster import Blaster
-from lntools.l2.checker import Checker
-from lntools.l2.doc_generator import DocGenerator
-from lntools.l2.reviewer import Reviewer
-from lntools.l2.signature_lister import SignatureLister
-from lntools.l3.hook_runner import HookRunner
-from lntools.l3.mover import Mover
+from ...l0.initializer import Initializer
+from ...l0.project_layout import ProjectLayout
+from ...l0.violation import Violation
+from ...l1.graph import Graph
+from ...l1.scanner import Scanner
+from ...l1.surface import Surface
+from ...l2.blaster import Blaster
+from ...l2.checker import Checker
+from ...l2.doc_generator import DocGenerator
+from ...l2.reviewer import Reviewer
+from ...l2.signature_lister import SignatureLister
+from ...l3.hook_runner import HookRunner
+from ...l3.mover import Mover
 
 
 # lnt 명령줄 진입점
@@ -27,7 +27,7 @@ class Cli:
         p.add_argument("--root", default=".", help="프로젝트 안의 아무 경로. 기본: 현재 디렉토리")
         sub = p.add_subparsers(dest="cmd", required=True)
 
-        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환 검사")
+        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환 검사. 문법 오류 파일도 알린다")
         c.add_argument("--file", help="이 파일을 포함하는 모듈의 위반만")
 
         b = sub.add_parser("blast", help="모듈 변경 시 영향 범위")

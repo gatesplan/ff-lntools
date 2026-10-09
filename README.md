@@ -31,7 +31,7 @@ tests/
   l1/order/test_order.py    # mirrors src
 ```
 
-Four rules.
+Five rules.
 
 | Code | Rule |
 |---|---|
@@ -39,6 +39,7 @@ Four rules.
 | C2 | Import only names on a **surface**: a module (`shop.l1.order`) or a layer (`shop.l1`). Never reach into a module's files or a nested module's internals, never import a name the surface does not publish, and no two modules in one layer may publish the same name |
 | C3 | A module's layer = max(layer of its dependencies) + 1. No dependencies means l0. Any third-party package means at least l1 |
 | C4 | No cycles between modules |
+| C5 | Imports inside the package are **relative** (`from ...l1.order import Order`), so the package still works when nested inside another project |
 
 Why.
 
@@ -58,7 +59,7 @@ is checked and violations come back as errors.
 | Command | Role |
 |---|---|
 | `lnt init` | Install protocol docs, `CLAUDE.md` and Claude Code hooks into a project |
-| `lnt check` | C1-C4. Exit 1 on violation |
+| `lnt check` | C1-C5, plus files that fail to parse. Exit 1 on violation |
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
 | `lnt map` | Modules, layers, dependencies at a glance |
 | `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |

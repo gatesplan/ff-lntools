@@ -1,4 +1,4 @@
-from lntools.l1.graph import Graph
+from ...l1.graph import Graph
 
 
 # 영향 범위 보고서

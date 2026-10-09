@@ -12,7 +12,7 @@
 이 프로젝트 자체가 ln-structure 이며 자기 자신을 검사한다. 훅이 `.claude/settings.json` 에 등록되어 있다.
 
 - 소스: `src/lntools/l0..l4`. 모듈 목록은 `src/lntools/for-agent-layerinfo.md`
-- 테스트: `tests/` 미러 구조. fixture 는 `tests/fixtures/sample` (의도된 위반 12건이 심어진 샘플)
+- 테스트: `tests/` 미러 구조. fixture 는 `tests/fixtures/sample` (의도된 위반 13건이 심어진 샘플)
 - 실행: `python -m pytest -q`, `lnt check`, `lnt doc --check`. `lnt` 는 이 저장소의 편집 설치라 소스를 그대로 돈다
 - 개발 env: conda `py312`. 배포는 `uv tool install -e . --python 3.14` (사용자 bin 의 `lnt`). 훅은 `lnt hook ...` 으로 부른다
 - 이 셸의 `python` 은 conda env 를 활성화하지 않으면 Microsoft Store 바로가기다. 개발 명령은 py312 의 python 으로 돌린다

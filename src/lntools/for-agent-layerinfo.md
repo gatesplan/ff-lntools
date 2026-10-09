@@ -2,32 +2,32 @@
 
 <!-- lnt:generated:start -->
 ## l0
-- edge: 모듈 간 의존 간선. kind runtime/type_only/inherits, 표면 초과 경로 extra, 가져온 이름 names, 층 단위 import 표시
-- initializer: lnt init. 프로토콜 문서 복사, CLAUDE.md, 훅 병합, 스킬 설치
-- module_ref: ln 모듈 하나. 이름, 스코프, 선언 층, 파일 목록, 외부 의존 여부
-- project_layout: 프로젝트 루트와 src/<pkg> 탐색. 층 폴더 이름 규칙 LAYER_RE
-- raw_import: 해석 전 import 문 하나. target, names, kind, external
-- signature_extractor: 모듈 파일의 공개 클래스와 타입 별칭, 클래스 메서드 시그니처, 층 __init__ 의 이름-모듈 매핑을 ast 로 추출
-- violation: 규칙 위반 C1~C4 레코드와 포맷, 종류별 풀이
+- edge: 한 모듈이 다른 모듈에 기대는 관계 하나를 나타낸다
+- initializer: 프로젝트가 ln 프로토콜을 쓰기 시작하게 한다
+- module_ref: ln 모듈 하나가 무엇인지 나타낸다
+- project_layout: 어디가 ln 프로젝트이고 그 패키지인지 알아낸다
+- raw_import: 아직 모듈로 풀지 않은 import 하나를 나타낸다
+- signature_extractor: 소스 파일이 바깥에 무엇을 내놓는지 읽어 낸다
+- violation: 규칙 위반 하나와 그 풀이를 나타낸다
 
 ## l1
-- graph: 모듈 그래프. 계산 층, 역의존, 인터페이스 경유 blast, 순환 탐지
-- scanner: src/<pkg> 를 훑어 모듈과 간선 생성. 상대/절대/층 단위 import 해석, TYPE_CHECKING 구분
-- surface: 모듈, 중첩 모듈, 층의 표면 계산과 __init__.py 생성. 중첩 모듈은 안쪽 맨 위 층을 공개
+- graph: 모듈 사이 의존 관계에 대한 물음에 답한다
+- scanner: 소스 코드를 모듈과 의존 관계로 옮긴다
+- surface: 모듈, 층, 패키지가 바깥에 무엇을 공개하는지 정한다
 
 ## l2
-- blaster: blast 결과 텍스트 보고서
-- checker: C1 방향, C2 표면(표면 너머, 표면에 없는 이름, 층 안 이름 겹침), C3 층 일치, C4 순환 검사
-- doc_generator: layerinfo 와 __init__.py 생성과 검사. 예전 층별 문서 알림, moduleinfo stamp 는 호환용
-- reviewer: lnt review. 위반이 아닌 점검 대상. 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출
-- signature_lister: lnt sig. 층이나 모듈의 공개 시그니처를 문서 없이 그 자리에서 계산
+- blaster: 한 모듈을 바꿀 때 영향이 어디까지 가는지 보고한다
+- checker: 프로젝트가 ln 규칙을 지키는지 판정한다
+- doc_generator: 생성되는 문서와 __init__ 이 코드와 어긋나지 않게 한다
+- reviewer: 위반은 아니지만 사람이 볼 만한 구조를 짚는다
+- signature_lister: 공개 시그니처를 문서 없이 필요할 때 보여 준다
 
 ## l3
-- hook_runner: Claude Code 훅 진입. stdin JSON 해석, exit 2 / additionalContext 채널 선택
-- mover: lnt move. 모듈 층 이동, import 재작성, tests 미러, __init__ 와 문서 재생성
+- hook_runner: Claude Code 가 편집하는 순간에 lnt 의 판단을 전한다
+- mover: 모듈을 다른 층으로 옮겨도 프로젝트가 그대로 동작하게 한다
 
 ## l4
-- cli: lnt 명령줄. check, blast, map, sig, review, doc, move, hook, init
+- cli: 사람과 에이전트가 lnt 를 명령으로 쓰게 한다
 <!-- lnt:generated:end -->
 
 ## Notes

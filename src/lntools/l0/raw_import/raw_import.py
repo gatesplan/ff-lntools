@@ -9,3 +9,4 @@ class RawImport:
     kind: str                # runtime | type_only | inherits
     line: int
     external: bool = False   # 표준 라이브러리가 아닌 외부 패키지
+    absolute: bool = False   # 자기 패키지를 절대 경로로 가리킴 (from pkg.l1.order import ...)

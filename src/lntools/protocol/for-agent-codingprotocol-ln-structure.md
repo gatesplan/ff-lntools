@@ -14,7 +14,7 @@ AI 생성 코드의 의존성 관리를 선형화하고, 계층의 목적 없이
    - `__init__.py`는 패키지 루트까지 모두 `lnt doc`이 만든다. 손으로 고치지 않는다.
    - 파일 하나에 클래스 하나. 파일 이름이 그 세부 책임의 이름이 되어, 모듈 폴더만 봐도 무엇으로 이뤄졌는지 보인다.
    - 모듈 하나에 책임 하나. 여러 책임을 한 모듈에 몰면 그 모듈이 허브가 되어 영향 범위(blast)가 무뎌진다.
-   - 모듈 안 파일 사이의 관계는 검사하지 않는다(순환 허용). 그 관계까지 검사가 필요해지면 중첩 모듈로 바꾼다. 중첩 안에서는 C1~C4가 걸린다.
+   - 모듈 안 파일 사이의 관계는 검사하지 않는다(순환 허용). 그 관계까지 검사가 필요해지면 중첩 모듈로 바꾼다. 중첩 안에서는 C1~C5가 걸린다.
 
 2. l0, l1, ... ln 층 규칙
    - 외부 라이브러리 의존이 없는 모듈 (표준 라이브러리만 허용)의 위치
@@ -31,6 +31,7 @@ AI 생성 코드의 의존성 관리를 선형화하고, 계층의 목적 없이
      표면에 없는 이름(함수, 상수, 비공개 클래스)을 가져오는 것도, 같은 층에서 공개 이름이 겹치는 것도 표면 위반(C2)이다.
    - `if TYPE_CHECKING:` 안의 임포트도 의존이다. 층 판정에 포함한다.
    - 모듈 간 순환은 금지. 모듈 내부 파일 간 순환은 규칙 밖 (허용).
+   - 패키지 안 임포트는 상대 경로로 쓴다(C5). 절대 경로는 패키지가 다른 프로젝트에 중첩 모듈로 들어가면 깨진다.
 
 5. 진입점 규칙
    - 외부 진입점은 마지막 층에 위치하며, 외부에서는 마지막 층의 진입점만 re-export 한다.
@@ -82,7 +83,7 @@ tests/
 지울 수 없는 정의가 있으면(표면에서 빠질 이름이 아직 코드에 있거나 `__init__` 안에 코드가 있으면) 그 파일은 쓰지 않고 알린다.
 쓰는 곳을 고친 뒤에도 알림이 남으면(다른 모듈의 이름을 다시 내보내던 경우) 그 파일을 지우고 다시 `lnt doc`을 돌린다.
 모듈을 새로 만들거나 공개 이름을 바꾸면 `lnt doc`을 돌린다. 안 돌리면 훅과 `lnt doc --check`가 알린다.
-모든 import는 상대 경로라 모듈을 옮겨도(`lnt move`) 그대로다.
+패키지 안 import는 모두 상대 경로다. 패키지가 다른 프로젝트에 중첩 모듈로 들어가도 그대로 동작하고, `lnt move`도 상대 경로로 고친다.
 
 ### 모듈 __init__.py (모듈 표면)
 
@@ -96,7 +97,8 @@ __all__ = ["Order"]
 ```
 
 ```python
-from fishfactory.l1.order import Order  # 모듈 표면 import
+# src/fishfactory/l2/report/report.py
+from ...l1.order import Order  # 모듈 표면 import
 ```
 
 ### 중첩 모듈 __init__.py
@@ -138,7 +140,8 @@ _EXPORTS = {
 ```
 
 ```python
-from fishfactory.l1 import Order, Pair  # 레이어 단위 import. order, pair만 로드
+# src/fishfactory/l2/report/report.py
+from ...l1 import Order, Pair  # 레이어 단위 import. order, pair만 로드
 ```
 
 ### 패키지 최상단 __init__.py
@@ -156,7 +159,7 @@ _EXPORTS = {
 ```
 
 ```python
-from fishfactory import Portfolio  # 최단 경로 import
+from fishfactory import Portfolio  # 패키지 밖에서 쓰는 최단 경로 import. 패키지 안은 상대 경로
 ```
 
 ```python
@@ -223,15 +226,15 @@ class OrderPlacer(Protocol):
 
 # l1/strategy/strategy.py
 from typing import Protocol
-from shop.l0.order_placer import OrderPlacer
+from ...l0.order_placer import OrderPlacer
 
 class Strategy(Protocol):
     def on_tick(self, placer: OrderPlacer, price: float) -> None: ...
 
 # l2/momentum/momentum.py
 from typing_extensions import override
-from shop.l0.order_placer import OrderPlacer
-from shop.l1.strategy import Strategy
+from ...l0.order_placer import OrderPlacer
+from ...l1.strategy import Strategy
 
 class Momentum(Strategy):
     @override
@@ -240,8 +243,8 @@ class Momentum(Strategy):
 
 # l2/engine/engine.py
 from typing_extensions import override
-from shop.l0.order_placer import OrderPlacer
-from shop.l1.strategy import Strategy
+from ...l0.order_placer import OrderPlacer
+from ...l1.strategy import Strategy
 
 class Engine(OrderPlacer):
     def __init__(self, strategy: Strategy):
@@ -255,8 +258,8 @@ class Engine(OrderPlacer):
         self.strategy.on_tick(self, 100.0)
 
 # l3/app/app.py  (진입점. 연결은 여기서만)
-from shop.l2.engine import Engine
-from shop.l2.momentum import Momentum
+from ...l2.engine import Engine
+from ...l2.momentum import Momentum
 
 class App:
     def __init__(self):
@@ -284,17 +287,23 @@ Engine과 Momentum은 같은 l2에 있으면서 서로를 모른다.
 3. 상세: 문서로 두지 않는다. 코드를 읽는다
 ```
 
-모듈 목록은 `lnt doc`이 마커 사이에 생성한다. 책임 한 줄은 사람이 마커 안의 각 줄에 쓰고, 다음 생성 때 보존된다.
-새 모듈은 `[설명 필요]`로 들어간다. 코드만 보고 알 수 없는 설계 이유와 코드 밖 계약은 마커 밖 Notes에 짧게 쓴다.
+모듈 목록은 `lnt doc`이 마커 사이에 생성한다. 책임 한 줄은 마커 안의 각 줄에 쓰고, 다음 생성 때 보존된다.
+새 모듈은 `[설명 필요]`로 들어가고 `lnt doc`과 훅이 알린다. 책임은 사람이 정하는 스펙이고, 처음 채우는 쪽이 에이전트여도 같은 기준으로 쓴다.
+
+- 책임 한 줄에는 그 모듈이 무엇을 맡는지(무엇에 답하는지) 쓴다
+- 어떻게 하는지(기능 나열, 알고리즘, 처리 단계, 함수 이름)는 쓰지 않는다. 세부 기능은 코드와 `lnt sig`가 보여 준다
+- 책임으로 써 보면 같은 일을 맡은 모듈이 여럿인지 드러난다. 기능 나열로는 보이지 않는다
+
+코드만 보고 알 수 없는 설계 이유와 코드 밖 계약은 마커 밖 Notes에 짧게 쓴다.
 
 ```markdown
 # for-agent-layerinfo.md
 
 <!-- lnt:generated:start -->
 ## l0
-- candle: 캔들 하나. 시고저종과 거래량
+- candle: 한 구간의 가격 흐름을 값으로 나타낸다
 ## l1
-- order: 주문 객체. 체결과 취소 상태
+- order: 주문이 체결되거나 취소되기까지의 상태를 맡는다
 <!-- lnt:generated:end -->
 
 ## Notes
@@ -307,7 +316,7 @@ Engine과 Momentum은 같은 l2에 있으면서 서로를 모른다.
 `ff-lntools` 패키지. 프로젝트 env에 설치되어 있어야 한다.
 
 ```
-lnt check [--file PATH]     # 층 방향, 표면 import, 층 일치, 모듈 간 순환 검사. 위반 시 exit 1
+lnt check [--file PATH]     # 층 방향, 표면 import, 층 일치, 모듈 간 순환 검사. 문법 오류 파일도 알린다. 위반 시 exit 1
 lnt blast MODULE            # MODULE에 의존하는 상위 모듈 목록 (상속 경유 포함)
 lnt sig [TARGET ...]        # 층이나 모듈의 공개 시그니처. 없으면 전체
 lnt review                  # 점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출. exit 0

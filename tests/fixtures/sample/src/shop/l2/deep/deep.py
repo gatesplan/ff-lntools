@@ -1,4 +1,4 @@
-from shop.l1.order.order import Order
+from ...l1.order.order import Order
 
 
 class Deep:

@@ -2,10 +2,10 @@ import ast
 import re
 from pathlib import Path
 
-from lntools.l0.project_layout import ProjectLayout
-from lntools.l0.signature_extractor import SignatureExtractor
-from lntools.l1.graph import Graph
-from lntools.l1.surface import Surface
+from ...l0.project_layout import ProjectLayout
+from ...l0.signature_extractor import SignatureExtractor
+from ...l1.graph import Graph
+from ...l1.surface import Surface
 
 SKIP_DIRS = {"tests", "build", "dist", "venv", "env", "node_modules", "site-packages", "__pycache__"}
 SCRIPTS_RE = re.compile(r"^\[project\.scripts\]\s*$(.*?)(?=^\[|\Z)", re.M | re.S)

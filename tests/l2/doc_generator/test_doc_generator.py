@@ -111,3 +111,15 @@ def test_init_with_own_code_is_kept(layout: ProjectLayout, graph: Graph):
     docs.write_all()
     assert root.read_text(encoding="utf-8") == old
     assert any("src/shop/__init__.py" in n and "data_dir" in n for n in docs.notices)
+
+
+# 책임 한 줄이 비어 있으면 기준과 함께 알린다. 채우면 알림이 사라진다
+def test_need_desc_notice_with_rule(layout: ProjectLayout, graph: Graph):
+    docs = DocGenerator(layout, graph)
+    docs.write_all()
+    root = [n for n in docs.notices if n.startswith("책임 한 줄 필요") and "src/shop/for-agent-layerinfo.md" in n]
+    assert len(root) == 1 and "order" in root[0] and "무엇을 맡는지" in root[0]
+    p = docs.layerinfo_path("")
+    p.write_text(p.read_text(encoding="utf-8").replace("- order: [설명 필요]", "- order: 주문 상태를 맡는다"), encoding="utf-8")
+    names = docs.need_desc_notices({""})[0].split(": ", 1)[1].split(" (")[0].split(", ")
+    assert "order" not in names and "pair" in names
