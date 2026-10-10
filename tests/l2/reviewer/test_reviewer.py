@@ -68,6 +68,27 @@ def test_crowded_files_skip_top_layer(layout: ProjectLayout):
     assert _review(layout).crowded_files() == [("l1.bundle", "bundle.py", 2)]
 
 
+# 같은 파일의 클래스를 상속하는 이름표 클래스만 빠진다. 필드, 멤버, 메서드가 있거나 무관한 이름표는 그대로 잡힌다
+def test_label_exception_hierarchy_counts_as_one(layout: ProjectLayout):
+    cases = {
+        "errors": ('class Errors(Exception):\n    """기반"""\n\n\n'
+                   'class RateLimit(Errors):\n    """초과"""\n\n\n'
+                   "class Timeout(Errors):\n    pass\n\n\n"
+                   "class Gone(Timeout):\n    ...\n"),
+        "models": "class Models:\n    a: int\n\n\nclass Other:\n    b: str\n",
+        "detail": "class Detail:\n    a: int\n\n\nclass More(Detail):\n    settings: dict\n",
+        "kinds": "import enum\n\n\nclass Kinds(enum.Enum):\n    A = 1\n\n\nclass Sorts(enum.Enum):\n    B = 2\n",
+        "rich": ("class Rich(Exception):\n    pass\n\n\n"
+                 "class Coded(Rich):\n    def __init__(self, code: int) -> None:\n        self.code = code\n"),
+        "tags": "class Tags:\n    pass\n\n\nclass Marks:\n    pass\n",
+    }
+    for name, body in cases.items():
+        _module(layout, f"l1/{name}", body)
+    crowded = {n for n, _, _ in _review(layout).crowded_files()}
+    assert "l1.errors" not in crowded
+    assert {"l1.models", "l1.detail", "l1.kinds", "l1.rich", "l1.tags"} <= crowded
+
+
 def test_lines_summary(layout: ProjectLayout, graph: Graph):
     lines = Reviewer(layout, graph).lines()
     assert lines[0].startswith("고아:")

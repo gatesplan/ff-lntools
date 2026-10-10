@@ -93,6 +93,20 @@ class Reviewer:
             out.append(name)
         return out
 
+    # 본문이 docstring, pass, ... 뿐인 클래스. 필드도 메서드도 없는 분류 이름
+    @staticmethod
+    def _is_label(node: ast.ClassDef) -> bool:
+        return all(isinstance(n, ast.Pass) or (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)
+                                               and (isinstance(n.value.value, str) or n.value.value is Ellipsis))
+                   for n in node.body)
+
+    # 파일의 클래스 수. 같은 파일의 클래스를 상속하는 이름표 클래스는 세지 않는다 (예외 계층은 기반 하나로 센다)
+    def _class_count(self, tree: ast.Module) -> int:
+        classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+        local = {c.name for c in classes}
+        return sum(1 for c in classes
+                   if not (self._is_label(c) and any(isinstance(b, ast.Name) and b.id in local for b in c.bases)))
+
     # 클래스가 여럿인 파일 (1파일 1클래스 점검). 반환: [(모듈, 파일 이름, 클래스 수)]. 맨 위 층은 진입점 예외라 뺀다
     def crowded_files(self) -> list[tuple[str, str, int]]:
         out: list[tuple[str, str, int]] = []
@@ -101,7 +115,7 @@ class Reviewer:
                 continue
             for f in sorted(m.path.glob("*.py")):
                 tree = self._parse(f) if f.name != "__init__.py" else None
-                count = sum(1 for n in tree.body if isinstance(n, ast.ClassDef)) if tree else 0
+                count = self._class_count(tree) if tree else 0
                 if count > 1:
                     out.append((name, f.name, count))
         return out

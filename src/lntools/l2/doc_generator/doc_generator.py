@@ -56,7 +56,8 @@ class DocGenerator:
     def layerinfo_block(self, scope: str) -> str:
         existing = self._read(self.layerinfo_path(scope))
         descs: dict[str, str] = {}
-        for line in existing.splitlines():
+        # 마커가 있으면 그 안만 읽는다. Notes 는 자유 기술이라 같은 형식의 줄이 있어도 책임 한 줄이 아니다
+        for line in (self.extract_block(existing) or existing).splitlines():
             m = DESC_RE.match(line.strip())
             if m:
                 descs[m.group(1)] = m.group(2).strip()

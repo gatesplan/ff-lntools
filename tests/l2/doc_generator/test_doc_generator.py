@@ -32,6 +32,20 @@ def test_notes_and_descriptions_preserved(layout: ProjectLayout, graph: Graph):
     assert "손으로 쓴 메모" in after
 
 
+# Notes 에 같은 형식의 줄이 있어도 생성 영역의 책임 한 줄은 그대로다
+def test_notes_lines_do_not_override_descriptions(layout: ProjectLayout, graph: Graph):
+    docs = DocGenerator(layout, graph)
+    docs.write_all()
+    p = docs.layerinfo_path("")
+    text = p.read_text(encoding="utf-8").replace("- order: [설명 필요]", "- order: 주문 객체")
+    p.write_text(text + "\n## Notes\n\n- order: 설계 메모\n", encoding="utf-8")
+    docs.write_all()
+    block = docs.extract_block(p.read_text(encoding="utf-8"))
+    assert "- order: 주문 객체" in block
+    assert "설계 메모" not in block
+    assert docs.check() == []
+
+
 def test_check_detects_new_module(layout: ProjectLayout, graph: Graph):
     DocGenerator(layout, graph).write_all()
     mod = layout.package_root / "l0" / "clock"
