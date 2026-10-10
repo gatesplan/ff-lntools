@@ -5,8 +5,8 @@ from pathlib import Path
 
 from ...l0.initializer import Initializer
 from ...l0.project_layout import ProjectLayout
-from ...l0.violation import Violation
 from ...l1.graph import Graph
+from ...l1.python import PythonLanguage
 from ...l1.scanner import Scanner
 from ...l1.surface import Surface
 from ...l2.blaster import Blaster
@@ -19,10 +19,11 @@ from ...l3.map_exporter import MapExporter
 from ...l3.mover import Mover
 
 
-# lnt 명령줄 진입점
+# lnt 명령줄 진입점. 언어 구현을 고르고 모든 하위에 넘긴다
 class Cli:
     def __init__(self, argv: list[str]):
         self.argv = argv
+        self.language = PythonLanguage()
 
     def run(self) -> int:
         p = argparse.ArgumentParser(prog="lnt", description="ln-structure 도구")
@@ -36,7 +37,7 @@ class Cli:
         b.add_argument("module")
         b.add_argument("-d", "--depth", type=int, default=1)
 
-        d = sub.add_parser("doc", help="layerinfo 와 __init__.py(모듈 표면, 층 표면) 생성/검사")
+        d = sub.add_parser("doc", help="layerinfo 와 표면 파일(모듈 표면, 층 표면) 생성/검사")
         d.add_argument("--check", action="store_true", help="생성 결과와 파일 비교만")
         d.add_argument("--stamp", metavar="MODULE", help="예전 moduleinfo 의 sources hash 갱신 (호환용). all 이면 문서가 있는 모든 모듈")
 
@@ -59,8 +60,9 @@ class Cli:
         i.add_argument("--skill", action="store_true", help="~/.claude/skills/init-protocol 스킬만 설치")
 
         args = p.parse_args(self.argv)
+        lang = self.language
         if args.cmd == "init":
-            ini = Initializer(Path(args.root).resolve())
+            ini = Initializer(Path(args.root).resolve(), lang.protocol_doc)
             if args.skill:
                 print(f"스킬 설치: {ini.install_skill()}")
                 return 0
@@ -72,14 +74,14 @@ class Cli:
             for stream in (sys.stdin, sys.stdout, sys.stderr):
                 if hasattr(stream, "reconfigure"):
                     stream.reconfigure(encoding="utf-8")
-            runner = HookRunner(sys.stdin.read(), Path.cwd())
+            runner = HookRunner(sys.stdin.read(), Path.cwd(), lang)
             return runner.post_edit() if args.event == "post-edit" else runner.session_start()
 
         layout = ProjectLayout.find(Path(args.root))
         if layout is None:
             sys.stderr.write("src/<pkg>/lN 구조를 찾지 못함\n")
             return 1
-        modules, edges = Scanner(layout).scan()
+        modules, edges = Scanner(layout, lang).scan()
         graph = Graph(modules, edges)
 
         if args.cmd == "check":
@@ -87,10 +89,10 @@ class Cli:
             if args.file:
                 chain = graph.modules_of(Path(args.file))
                 only = {x.name for x in chain}
-            violations = Checker(graph, Surface(layout, modules)).run(only)
+            violations = Checker(graph, Surface(layout, modules, lang)).run(only)
             for v in violations:
                 print(v.format(layout.project_root))
-            for h in Violation.hints(violations):
+            for h in lang.hints({v.code for v in violations}):
                 print(h)
             print(f"위반 {len(violations)}건, 모듈 {len(modules)}개")
             return 1 if violations else 0
@@ -101,7 +103,7 @@ class Cli:
 
         if args.cmd == "move":
             try:
-                for line in Mover(layout, graph).move(args.module, args.layer):
+                for line in Mover(layout, graph, lang).move(args.module, args.layer):
                     print(line)
             except ValueError as e:
                 sys.stderr.write(f"{e}\n")
@@ -109,12 +111,12 @@ class Cli:
             return 0
 
         if args.cmd == "review":
-            for line in Reviewer(layout, graph).lines():
+            for line in Reviewer(layout, graph, lang).lines():
                 print(line)
             return 0
 
         if args.cmd == "sig":
-            lister = SignatureLister(layout, graph)
+            lister = SignatureLister(layout, graph, lang)
             print(lister.report(args.targets))
             return 1 if lister.missing else 0
 
@@ -122,7 +124,7 @@ class Cli:
             # 받는 쪽은 UTF-8 로 읽는다. 콘솔 로케일과 무관하게 고정
             if hasattr(sys.stdout, "reconfigure"):
                 sys.stdout.reconfigure(encoding="utf-8")
-            print(json.dumps(MapExporter(layout, graph).data(), ensure_ascii=False, indent=1))
+            print(json.dumps(MapExporter(layout, graph, lang).data(), ensure_ascii=False, indent=1))
             return 0
 
         if args.cmd == "map":
@@ -134,7 +136,7 @@ class Cli:
             return 0
 
         if args.cmd == "doc":
-            docs = DocGenerator(layout, graph)
+            docs = DocGenerator(layout, graph, lang)
             if args.stamp == "all":
                 for w in docs.stamp_all():
                     print(layout.relative(w))

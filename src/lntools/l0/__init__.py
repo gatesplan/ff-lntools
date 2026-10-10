@@ -4,10 +4,10 @@ import importlib
 _EXPORTS = {
     "Edge": "edge",
     "Initializer": "initializer",
+    "Language": "language",
     "ModuleRef": "module_ref",
     "ProjectLayout": "project_layout",
-    "RawImport": "raw_import",
-    "SignatureExtractor": "signature_extractor",
+    "RawImport": "language",
     "Violation": "violation",
 }
 __all__ = list(_EXPORTS)

@@ -4,6 +4,9 @@ from lntools.l0.project_layout import ProjectLayout
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
 from lntools.l2.reviewer import Reviewer
+from lntools.l1.python import PythonLanguage
+
+LANG = PythonLanguage()
 
 
 def _module(layout: ProjectLayout, rel: str, body: str) -> None:
@@ -16,8 +19,8 @@ def _module(layout: ProjectLayout, rel: str, body: str) -> None:
 
 
 def _review(layout: ProjectLayout) -> Reviewer:
-    modules, edges = Scanner(layout).scan()
-    return Reviewer(layout, Graph(modules, edges))
+    modules, edges = Scanner(layout, LANG).scan()
+    return Reviewer(layout, Graph(modules, edges), LANG)
 
 
 # ledger 는 Order 를 안에서만 쓰고, audit 은 ledger 를 쓰면서 Order 도 직접 쓴다
@@ -27,7 +30,7 @@ def _ledger_and_audit(layout: ProjectLayout, ledger_sig: str) -> None:
 
 
 def test_orphans_in_sample(layout: ProjectLayout, graph: Graph):
-    assert Reviewer(layout, graph).orphans() == ["l1.pair", "l2.deep", "l2.service", "l3.intruder"]
+    assert Reviewer(layout, graph, LANG).orphans() == ["l1.pair", "l2.deep", "l2.service", "l3.intruder"]
 
 
 def test_outside_code_and_scripts_count_as_use(layout: ProjectLayout):
@@ -56,9 +59,9 @@ def test_bypass_skipped_through_type_alias(layout: ProjectLayout):
 
 def test_top_layer_and_l0_targets_are_not_bypasses(layout: ProjectLayout, graph: Graph):
     # l4.app 은 l3.portfolio 를 쓰면서 l1.order 도 쓰지만 맨 위 층이라 조립으로 본다
-    assert Reviewer(layout, graph).bypasses("l4.app") == []
+    assert Reviewer(layout, graph, LANG).bypasses("l4.app") == []
     # l3.portfolio 는 l2.report 를 쓰면서 l0.candle 도 쓰지만 l0 은 어휘다
-    assert all(b != "l0.candle" for b, _ in Reviewer(layout, graph).bypasses("l3.portfolio"))
+    assert all(b != "l0.candle" for b, _ in Reviewer(layout, graph, LANG).bypasses("l3.portfolio"))
 
 
 def test_crowded_files_skip_top_layer(layout: ProjectLayout):
@@ -90,11 +93,11 @@ def test_label_exception_hierarchy_counts_as_one(layout: ProjectLayout):
 
 
 def test_lines_summary(layout: ProjectLayout, graph: Graph):
-    lines = Reviewer(layout, graph).lines()
+    lines = Reviewer(layout, graph, LANG).lines()
     assert lines[0].startswith("고아:")
     assert lines[-1] == "점검 대상 5건"
 
 
 # 샘플의 Store.put(snap: TickSnapshot, ...) 은 표면에 없는 안쪽 타입을 쓴다. 바깥에서는 TickSnapshot 을 만들 수 없다
 def test_leaked_inner_type(layout: ProjectLayout, graph: Graph):
-    assert Reviewer(layout, graph).leaks() == [("l3.portfolio", "TickSnapshot", "l3.portfolio.l0.tick_snapshot")]
+    assert Reviewer(layout, graph, LANG).leaks() == [("l3.portfolio", "TickSnapshot", "l3.portfolio.l0.tick_snapshot")]

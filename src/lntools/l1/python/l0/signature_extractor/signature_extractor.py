@@ -8,7 +8,7 @@ TYPE_HEADS = {
 }
 
 
-# 모듈 디렉토리에서 공개 이름과 그 시그니처를 ast로 뽑는다
+# 소스 파일에 정의된 것을 ast 로 읽는다. 공개 이름, 시그니처, 클래스 수, 타입 별칭
 class SignatureExtractor:
     def __init__(self):
         self.unreadable: list[Path] = []   # 문법 오류로 읽지 못한 파일
@@ -48,9 +48,9 @@ class SignatureExtractor:
                 out.add(node.target.id)
         return out
 
-    # 층 __init__ 의 공개 이름 -> 모듈 폴더명. from .x import Y 와 _EXPORTS 딕셔너리 둘 다 지원
+    # __init__ 이 내보내는 이름 -> __init__ 폴더 기준 점 경로. from .x.y import Z 와 _EXPORTS 딕셔너리 둘 다 지원
     @staticmethod
-    def layer_exports(init: Path) -> dict[str, str]:
+    def init_exports(init: Path) -> dict[str, str]:
         out: dict[str, str] = {}
         if not init.is_file():
             return out
@@ -60,9 +60,8 @@ class SignatureExtractor:
             return out
         for node in tree.body:
             if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
-                folder = node.module.split(".")[0]
                 for a in node.names:
-                    out[a.asname or a.name] = folder
+                    out[a.asname or a.name] = node.module
             if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict):
                 if any(isinstance(t, ast.Name) and t.id == "_EXPORTS" for t in node.targets):
                     for k, v in zip(node.value.keys, node.value.values):
@@ -88,6 +87,39 @@ class SignatureExtractor:
             else:
                 lines.append(f"{name} = {ast.unparse(node.value)}  # {rel}")
         return lines
+
+    # words 에 든 모듈 수준 타입 별칭(EntityType = Union[Character, ...])을 풀어 그 안의 이름까지 더한다
+    def expand_aliases(self, module_dir: Path, words: set[str]) -> set[str]:
+        names = set(words)
+        for f in sorted(module_dir.rglob("*.py")):
+            tree = self._parse(f)
+            for node in tree.body if tree else []:
+                target = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else getattr(node, "target", None)
+                value = getattr(node, "value", None)
+                if isinstance(target, ast.Name) and target.id in names and isinstance(value, (ast.Subscript, ast.BinOp, ast.Name)):
+                    names |= {n.id for n in ast.walk(value) if isinstance(n, ast.Name)}
+        return names
+
+    # 모듈 폴더 바로 아래 파일마다 클래스 수. 같은 파일의 클래스를 상속하는 이름표 클래스는 세지 않는다 (예외 계층은 기반 하나로 센다)
+    def class_counts(self, module_dir: Path) -> list[tuple[str, int]]:
+        out: list[tuple[str, int]] = []
+        for f in sorted(module_dir.glob("*.py")):
+            tree = self._parse(f) if f.name != "__init__.py" else None
+            out.append((f.name, self._class_count(tree) if tree else 0))
+        return out
+
+    # 본문이 docstring, pass, ... 뿐인 클래스. 필드도 메서드도 없는 분류 이름
+    @staticmethod
+    def _is_label(node: ast.ClassDef) -> bool:
+        return all(isinstance(n, ast.Pass) or (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)
+                                               and (isinstance(n.value.value, str) or n.value.value is Ellipsis))
+                   for n in node.body)
+
+    def _class_count(self, tree: ast.Module) -> int:
+        classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+        local = {c.name for c in classes}
+        return sum(1 for c in classes
+                   if not (self._is_label(c) and any(isinstance(b, ast.Name) and b.id in local for b in c.bases)))
 
     # 클래스이면 그 이름, 타입 별칭이면 별칭 이름, 아니면 None
     @staticmethod

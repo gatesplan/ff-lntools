@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from ...l0.language import Language
 from ...l0.project_layout import ProjectLayout
 from ...l1.graph import Graph
 from ...l1.surface import Surface
@@ -13,15 +14,16 @@ FORMAT = 1
 # lnt map --json. 지도를 그리는 쪽이 ln 규칙을 따로 해석하지 않도록 층, 의존, 위반, 고아 판정을 그대로 싣는다
 # 경로는 모두 프로젝트 루트 기준, / 구분
 class MapExporter:
-    def __init__(self, layout: ProjectLayout, graph: Graph):
+    def __init__(self, layout: ProjectLayout, graph: Graph, language: Language):
         self.layout = layout
         self.graph = graph
+        self.language = language
         self._innermost: dict[Path, str | None] = {}
 
     def data(self) -> dict:
         g = self.graph
         rel = self.layout.relative
-        resp = DocGenerator(self.layout, g).responsibilities()
+        resp = DocGenerator(self.layout, g, self.language).responsibilities()
         modules = sorted(g.modules.values(), key=lambda m: (m.scope, m.layer, m.name))
         return {
             "format": FORMAT,
@@ -35,8 +37,8 @@ class MapExporter:
             } for m in modules],
             "edges": self.edges(),
             "violations": [{"code": v.code, "module": v.module, "file": rel(v.file), "line": v.line, "message": v.message}
-                           for v in Checker(g, Surface(self.layout, g.modules)).run()],
-            "orphans": Reviewer(self.layout, g).orphans(),
+                           for v in Checker(g, Surface(self.layout, g.modules, self.language)).run()],
+            "orphans": Reviewer(self.layout, g, self.language).orphans(),
         }
 
     # 출발은 import 문이 든 가장 안쪽 모듈. 바깥 관점에서 같은 import 를 한 번 더 센 것은 합치고,

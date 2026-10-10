@@ -2,13 +2,17 @@ import json
 from pathlib import Path
 
 from lntools.l0.initializer import Initializer
+from lntools.l1.python import PythonLanguage
+
+LANG = PythonLanguage()
 
 
 def test_run_creates_docs_claude_md_and_hooks(tmp_path: Path):
-    lines = Initializer(tmp_path, home=tmp_path / "home").run()
-    for name in Initializer.PROTOCOL_FILES:
+    lines = Initializer(tmp_path, LANG.protocol_doc, home=tmp_path / "home").run()
+    for name in [Initializer.COMMON_DOC, LANG.protocol_doc]:
         assert (tmp_path / ".claude" / name).is_file()
-    assert sorted(p.name for p in (tmp_path / ".claude").glob("*.md")) == ["for-agent-codingprotocol-ln-structure.md"]
+    assert sorted(p.name for p in (tmp_path / ".claude").glob("*.md")) == [
+        "for-agent-codingprotocol-ln-structure-python.md", "for-agent-codingprotocol-ln-structure.md"]
     claude_md = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
     assert "for-agent-codingprotocol-ln-structure.md" in claude_md
     assert "@." not in claude_md
@@ -25,7 +29,7 @@ def test_existing_claude_md_and_settings_preserved(tmp_path: Path):
         "permissions": {"allow": ["Bash(ls)"]},
         "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo x"}]}]},
     }), encoding="utf-8")
-    Initializer(tmp_path, home=tmp_path / "home").run()
+    Initializer(tmp_path, LANG.protocol_doc, home=tmp_path / "home").run()
     assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == "mine\n"
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     assert settings["permissions"] == {"allow": ["Bash(ls)"]}
@@ -35,7 +39,7 @@ def test_existing_claude_md_and_settings_preserved(tmp_path: Path):
 
 
 def test_run_twice_does_not_duplicate_hooks(tmp_path: Path):
-    ini = Initializer(tmp_path, home=tmp_path / "home")
+    ini = Initializer(tmp_path, LANG.protocol_doc, home=tmp_path / "home")
     ini.run()
     ini.run()
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -48,7 +52,7 @@ def test_legacy_hook_commands_replaced(tmp_path: Path):
         "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": "python -m lntools hook session-start"}]}],
         "PostToolUse": [{"matcher": "Edit", "hooks": [{"type": "command", "command": "python -m lntools hook post-edit", "timeout": 30}]}],
     }}), encoding="utf-8")
-    line = Initializer(tmp_path, home=tmp_path / "home").merge_hooks()
+    line = Initializer(tmp_path, LANG.protocol_doc, home=tmp_path / "home").merge_hooks()
     settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
     cmds = [h["command"] for gs in settings["hooks"].values() for g in gs for h in g["hooks"]]
     assert cmds == ["lnt hook session-start", "lnt hook post-edit"]
@@ -58,6 +62,6 @@ def test_legacy_hook_commands_replaced(tmp_path: Path):
 
 
 def test_install_skill(tmp_path: Path):
-    p = Initializer(tmp_path, home=tmp_path / "home").install_skill()
+    p = Initializer(tmp_path, LANG.protocol_doc, home=tmp_path / "home").install_skill()
     assert p == tmp_path / "home" / ".claude" / "skills" / "init-protocol" / "SKILL.md"
     assert "lnt init" in p.read_text(encoding="utf-8")

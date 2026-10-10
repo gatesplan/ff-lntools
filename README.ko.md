@@ -49,7 +49,8 @@ tests/
 - 에이전트는 모듈 지도(모듈마다 책임 한 줄)에서 시작해 시그니처는 `lnt sig` 로 조회하고, 상세는 코드를 읽는다
 
 상세 규칙(중첩 모듈, 상호 호출 처리, 의존성 역전, `__init__` 패턴)은
-[`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md).
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md)(공통),
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md)(Python).
 
 ## 2. 도구가 하는 일
 
@@ -103,7 +104,8 @@ lnt init
 my-project/
   CLAUDE.md                                   # 없을 때만 생성. 프로토콜 문서를 가리킴
   .claude/
-    for-agent-codingprotocol-ln-structure.md  # 규칙. 세션마다 넣지 않고 필요할 때 읽는다
+    for-agent-codingprotocol-ln-structure.md         # 언어 공통 규칙. 세션마다 넣지 않고 필요할 때 읽는다
+    for-agent-codingprotocol-ln-structure-python.md  # Python 에서 쓰는 법: __init__ 패턴, import 문법, 예시 코드
     settings.json                             # Claude Code 훅. 기존 설정이 있으면 hooks 만 병합
 ```
 

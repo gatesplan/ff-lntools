@@ -2,8 +2,8 @@ import json
 import sys
 from pathlib import Path
 
+from ...l0.language import Language
 from ...l0.project_layout import ProjectLayout
-from ...l0.violation import Violation
 from ...l1.graph import Graph
 from ...l1.scanner import Scanner
 from ...l1.surface import Surface
@@ -14,8 +14,9 @@ from ...l2.doc_generator import DocGenerator
 
 # Claude Code 훅 진입. stdin JSON 을 읽고 exit code 와 출력 채널을 정한다
 class HookRunner:
-    def __init__(self, stdin_text: str, cwd: Path):
+    def __init__(self, stdin_text: str, cwd: Path, language: Language):
         self.cwd = cwd
+        self.language = language
         try:
             self.payload = json.loads(stdin_text) if stdin_text.strip() else {}
         except json.JSONDecodeError:
@@ -39,7 +40,7 @@ class HookRunner:
         if not file_path:
             return 0
         file = Path(file_path)
-        if file.suffix != ".py":
+        if file.suffix != self.language.suffix:
             return 0
         layout = ProjectLayout.find(file)
         if layout is None:
@@ -48,19 +49,19 @@ class HookRunner:
             file.resolve().relative_to(layout.package_root)
         except ValueError:
             return 0
-        modules, edges = Scanner(layout).scan()
+        modules, edges = Scanner(layout, self.language).scan()
         graph = Graph(modules, edges)
         chain = graph.modules_of(file)
         if not chain:
             return 0
         names = {m.name for m in chain}
-        surface = Surface(layout, modules)
+        surface = Surface(layout, modules, self.language)
         violations = Checker(graph, surface).run(only=names)
         if violations:
             sys.stderr.write("[lnt] ln-structure 위반. 수정 후 진행:\n")
             for v in violations:
                 sys.stderr.write("  " + v.format(layout.project_root) + "\n")
-            for h in Violation.hints(violations):
+            for h in self.language.hints({v.code for v in violations}):
                 sys.stderr.write(h + "\n")
             return 2
         inner = chain[-1]
@@ -69,7 +70,7 @@ class HookRunner:
         for m in chain:
             lines.extend(blaster.lines(m.name))
         scopes = {m.scope for m in chain}
-        docs = DocGenerator(layout, graph, surface)
+        docs = DocGenerator(layout, graph, self.language, surface)
         for d in docs.check(scopes):
             lines.append(f"문서 불일치: {d}. lnt doc 으로 재생성")
         for p in docs.stale_inits(names):

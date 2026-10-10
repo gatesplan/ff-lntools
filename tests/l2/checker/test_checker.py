@@ -2,6 +2,9 @@ from lntools.l0.project_layout import ProjectLayout
 from lntools.l1.graph import Graph
 from lntools.l1.surface import Surface
 from lntools.l2.checker import Checker
+from lntools.l1.python import PythonLanguage
+
+LANG = PythonLanguage()
 
 
 def _codes(violations):
@@ -9,7 +12,7 @@ def _codes(violations):
 
 
 def _checker(layout: ProjectLayout, graph: Graph) -> Checker:
-    return Checker(graph, Surface(layout, graph.modules))
+    return Checker(graph, Surface(layout, graph.modules, LANG))
 
 
 def test_all_expected_violations(layout: ProjectLayout, graph: Graph):
@@ -44,8 +47,8 @@ def _module(layout: ProjectLayout, rel: str, body: str) -> None:
 
 def _rescan(layout: ProjectLayout) -> Checker:
     from lntools.l1.scanner import Scanner
-    modules, edges = Scanner(layout).scan()
-    return Checker(Graph(modules, edges), Surface(layout, modules))
+    modules, edges = Scanner(layout, LANG).scan()
+    return Checker(Graph(modules, edges), Surface(layout, modules, LANG))
 
 
 # 모듈은 클래스와 타입 별칭만 공개한다. 함수를 가져오면 C2

@@ -2,6 +2,7 @@ import hashlib
 import re
 from pathlib import Path
 
+from ...l0.language import Language
 from ...l0.project_layout import ProjectLayout
 from ...l1.graph import Graph
 from ...l1.surface import Surface
@@ -16,14 +17,15 @@ DESC_RULE = "무엇을 맡는지 쓴다. 어떻게 하는지(기능, 처리 단�
 OBSOLETE_GLOB = "for-agent-layerinfo-l*.md"
 
 
-# layerinfo 와 __init__.py(모듈 표면, 층 표면) 생성과 검사. 시그니처는 문서로 두지 않는다(lnt sig)
+# layerinfo 와 표면 파일(__init__.py 등) 생성과 검사. 시그니처는 문서로 두지 않는다(lnt sig)
 # moduleinfo stamp 는 예전 프로젝트 호환으로만 남긴다
 class DocGenerator:
     # surface: 이미 계산한 표면이 있으면 넘겨 같이 쓴다
-    def __init__(self, layout: ProjectLayout, graph: Graph, surface: Surface | None = None):
+    def __init__(self, layout: ProjectLayout, graph: Graph, language: Language, surface: Surface | None = None):
         self.layout = layout
         self.graph = graph
-        self.surface = surface if surface is not None else Surface(layout, graph.modules)
+        self.language = language
+        self.surface = surface if surface is not None else Surface(layout, graph.modules, language)
         self.notices: list[str] = []
         self._defs: set[str] | None = None
 
@@ -149,13 +151,12 @@ class DocGenerator:
     def stale_inits(self, names: set[str] | None = None) -> list[str]:
         expected = self.surface.render()
         if names is not None:
-            root = self.layout.package_root / "__init__.py"
             wanted = set()
             for n in names:
                 m = self.graph.modules[n]
-                wanted |= {m.path / "__init__.py", self.surface.layer_dir(m.layer_name) / "__init__.py"}
+                wanted |= {self.surface.module_file(n), self.surface.layer_file(m.layer_name)}
                 if m in self._root_top():
-                    wanted.add(root)
+                    wanted.add(self.surface.root_file())
             expected = {p: t for p, t in expected.items() if p in wanted}
         return sorted(self.layout.relative(p) for p, t in expected.items() if self._read(p) != t)
 
@@ -167,19 +168,19 @@ class DocGenerator:
     # 쓰면 사라지는 정의. 지금 __init__ 이 내보내는데 새 표면에는 없고 아직 패키지 어딘가에 정의된 이름,
     # 그리고 __init__ 파일 안에 직접 정의된 코드(생성 형식이 쓰는 이름은 빼고)
     def _still_defined(self, init: Path) -> list[str]:
-        dropped = set(self.surface.sig.layer_exports(init)) - self._new_names(init)
-        own_code = self.surface.sig.file_defs(init) - {"__all__", "_EXPORTS", "__getattr__"}
+        dropped = set(self.language.read_exports(init)) - self._new_names(init)
+        own_code = self.language.own_definitions(init)
         return sorted((dropped & self._package_defs()) | own_code)
 
     # 새로 만들 __init__ 이 내보낼 이름
     def _new_names(self, init: Path) -> set[str]:
-        if init == self.layout.package_root / "__init__.py":
+        if init == self.surface.root_file():
             return set(self.surface.of_root())
         for m in self.graph.modules.values():
-            if m.path / "__init__.py" == init:
+            if self.surface.module_file(m.name) == init:
                 return set(self.surface.of_module(m.name))
         for ln in self.surface.layer_names():
-            if self.surface.layer_dir(ln) / "__init__.py" == init:
+            if self.surface.layer_file(ln) == init:
                 return set(self.surface.of_layer(ln)[0])
         return set()
 
@@ -189,7 +190,7 @@ class DocGenerator:
             self._defs = set()
             for m in self.graph.modules.values():
                 if m.scope == "":
-                    self._defs |= self.surface.sig.defined_names(m.path)
+                    self._defs |= self.language.defined_names(m.path)
         return self._defs
 
     # 모듈 이름 -> 책임 한 줄. 비었거나 [설명 필요] 인 모듈은 빠진다
@@ -234,7 +235,7 @@ class DocGenerator:
 
     def _source_files(self, name: str) -> list[Path]:
         m = self.graph.modules[name]
-        return sorted(p for p in m.path.glob("*.py") if p.name != "__init__.py")
+        return sorted(p for p in m.path.glob("*" + self.language.suffix) if p != self.surface.module_file(name))
 
     def moduleinfo_path(self, name: str) -> Path:
         return self.graph.modules[name].path / "for-agent-moduleinfo.md"

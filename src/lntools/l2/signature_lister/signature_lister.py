@@ -1,17 +1,17 @@
+from ...l0.language import Language
 from ...l0.module_ref import ModuleRef
 from ...l0.project_layout import ProjectLayout
-from ...l0.signature_extractor import SignatureExtractor
 from ...l1.graph import Graph
 from ...l1.surface import Surface
 
 
 # lnt sig. 층이나 모듈의 공개 시그니처를 문서로 두지 않고 그 자리에서 계산한다
 class SignatureLister:
-    def __init__(self, layout: ProjectLayout, graph: Graph):
+    def __init__(self, layout: ProjectLayout, graph: Graph, language: Language):
         self.graph = graph
+        self.language = language
         self.package = layout.package_name
-        self.surface = Surface(layout, graph.modules)
-        self.sig = SignatureExtractor()
+        self.surface = Surface(layout, graph.modules, language)
         self.missing: list[str] = []
 
     # target: 층(l1, l3.portfolio.l1), 모듈(l1.order), 모듈 폴더명(order). 앞에 패키지명이 붙어도 된다. 빈 문자열이면 전체
@@ -39,7 +39,7 @@ class SignatureLister:
             for m in mods:
                 names = sorted(self.surface.of_module(m.name))
                 out.append(f"## {m.name}")
-                out.extend(self.sig.extract(m.path, names) if names else ["(공개 이름 없음)"])
+                out.extend(self.language.signatures(m.path, names) if names else ["(공개 이름 없음)"])
                 out.append("")
         return out[:-1] if out and out[-1] == "" else out
 

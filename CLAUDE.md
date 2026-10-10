@@ -2,7 +2,8 @@
 
 ## 구조 규칙
 
-이 프로젝트는 ln-structure 를 따른다. 규칙과 해결 방법은 필요할 때 `.claude/for-agent-codingprotocol-ln-structure.md` 를 읽는다.
+이 프로젝트는 ln-structure 를 따른다. 규칙과 해결 방법은 필요할 때 `.claude/for-agent-codingprotocol-ln-structure.md`(공통)와
+`.claude/for-agent-codingprotocol-ln-structure-<언어>.md`(파일 이름, 표면 파일, import 문법과 예시)를 읽는다.
 
 ## 프로젝트 설명
 
@@ -13,8 +14,10 @@
 
 - 소스: `src/lntools/l0..l4`. 모듈 목록은 `src/lntools/for-agent-layerinfo.md`
 - 테스트: `tests/` 미러 구조. fixture 는 `tests/fixtures/sample` (의도된 위반 13건이 심어진 샘플)
-- 실행: `python -m pytest -q`, `lnt check`, `lnt doc --check`. `lnt` 는 이 저장소의 편집 설치라 소스를 그대로 돈다
-- 개발 env: conda `py312`. 배포는 `uv tool install -e . --python 3.14` (사용자 bin 의 `lnt`). 훅은 `lnt hook ...` 으로 부른다
+- 실행: `python -m pytest -q`, `lnt check`, `lnt doc --check`
+- 사용자 bin 의 `lnt` 는 uv tool 에 일반 설치한 판이다. 소스를 고쳐도 바로 바뀌지 않아, 작업 중에 다른 프로젝트의 훅이 깨지지 않는다.
+  고친 소스로 검사하려면 `PYTHONPATH=src` 를 두고 py312 의 python 으로 `python -m lntools check`. 판을 확인한 뒤 `uv tool install --reinstall . --python 3.14` 로 올린다
+- 개발 env: conda `py312`. 훅은 `lnt hook ...` 으로 부른다
 - 이 셸의 `python` 은 conda env 를 활성화하지 않으면 Microsoft Store 바로가기다. 개발 명령은 py312 의 python 으로 돌린다
 - conda env 에는 lntools 를 깔지 않는다. 깔려 있으면 그 env 를 활성화했을 때 그쪽 `lnt` 가 먼저 잡힌다. 옮기는 방법은 `MIGRATION.md`
 

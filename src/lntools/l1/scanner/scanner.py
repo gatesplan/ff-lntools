@@ -1,22 +1,19 @@
-import ast
-import sys
 from pathlib import Path
 
 from ...l0.edge import Edge
+from ...l0.language import Language, RawImport
 from ...l0.module_ref import ModuleRef
 from ...l0.project_layout import ProjectLayout
-from ...l0.raw_import import RawImport
-from ...l0.signature_extractor import SignatureExtractor
 
 
-# src/<pkg>/ 를 훑어 모듈 목록과 의존 간선을 만든다
+# src/<pkg>/ 를 훑어 모듈 목록과 의존 간선을 만든다. 파일을 읽는 일은 language 가 한다
 class Scanner:
-    def __init__(self, layout: ProjectLayout):
+    def __init__(self, layout: ProjectLayout, language: Language):
         self.layout = layout
+        self.language = language
         self.pkg = layout.package_name
         self.modules: dict[str, ModuleRef] = {}
         self.edges: list[Edge] = []
-        self._stdlib = set(sys.stdlib_module_names)
         self._layer_exports: dict[str, dict[str, str]] = {}   # 층 이름 -> {공개 이름: 모듈 폴더명}
 
     def scan(self) -> tuple[dict[str, ModuleRef], list[Edge]]:
@@ -27,7 +24,7 @@ class Scanner:
             for f in m.files:
                 if f not in parsed:
                     try:
-                        parsed[f] = self._parse(f)
+                        parsed[f] = self.language.read_imports(f, self.layout.package_root)
                     except SyntaxError as e:
                         parsed[f] = []
                         errors[f] = e
@@ -49,93 +46,19 @@ class Scanner:
                 continue
             n = int(mt.group(1))
             layer_name = f"{scope_name}.{layer_dir.name}" if scope_name else layer_dir.name
-            self._layer_exports[layer_name] = SignatureExtractor.layer_exports(layer_dir / "__init__.py")
+            exports = self.language.read_exports(self.language.surface_path(layer_dir, "layer"))
+            self._layer_exports[layer_name] = {n: rel.split(".")[0] for n, rel in exports.items()}
             for mdir in sorted(layer_dir.iterdir()):
                 if not mdir.is_dir() or mdir.name.startswith(("_", ".")):
                     continue
                 nested = ProjectLayout.has_layers(mdir)
-                if not nested and not any(mdir.glob("*.py")):
+                if not nested and not any(mdir.glob("*" + self.language.suffix)):
                     continue
                 name = f"{layer_name}.{mdir.name}"
-                files = sorted(p for p in mdir.rglob("*.py"))
+                files = sorted(mdir.rglob("*" + self.language.suffix))
                 self.modules[name] = ModuleRef(name, scope_name, n, mdir, files, is_nested=nested)
                 if nested:
                     self._discover(mdir, name)
-
-    # 문법 오류는 SyntaxError 로 올린다. 호출한 쪽이 그 파일을 가진 모듈에 기록한다
-    def _parse(self, file: Path) -> list[RawImport]:
-        out: list[RawImport] = []
-        tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
-        local_names: dict[str, str] = {}   # 로컬 이름 -> 절대 target (상속 간선 해석용)
-        self._walk(tree, file, False, out, local_names)
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef):
-                continue
-            for base in node.bases:
-                root = base
-                while isinstance(root, ast.Attribute):
-                    root = root.value
-                if isinstance(root, ast.Name) and root.id in local_names:
-                    out.append(RawImport(local_names[root.id], [], "inherits", node.lineno))
-        return out
-
-    def _walk(self, node: ast.AST, file: Path, in_tc: bool, out: list[RawImport], local_names: dict[str, str]) -> None:
-        for child in ast.iter_child_nodes(node):
-            if isinstance(child, ast.If) and self._is_type_checking(child.test):
-                for b in child.body:
-                    self._walk_one(b, file, True, out, local_names)
-                for b in child.orelse:
-                    self._walk_one(b, file, in_tc, out, local_names)
-            else:
-                self._walk_one(child, file, in_tc, out, local_names)
-
-    def _walk_one(self, node: ast.AST, file: Path, in_tc: bool, out: list[RawImport], local_names: dict[str, str]) -> None:
-        kind = "type_only" if in_tc else "runtime"
-        if isinstance(node, ast.Import):
-            for a in node.names:
-                raw = self._absolute(a.name, file, node.lineno, [], kind)
-                out.append(raw)
-                if raw.target:
-                    local_names[(a.asname or a.name).split(".")[0]] = raw.target
-        elif isinstance(node, ast.ImportFrom):
-            names = [a.name for a in node.names]
-            if node.level == 0:
-                raw = self._absolute(node.module or "", file, node.lineno, names, kind)
-            else:
-                raw = self._relative(node.level, node.module, file, node.lineno, names, kind)
-            out.append(raw)
-            if raw.target:
-                for a in node.names:
-                    local_names[a.asname or a.name] = raw.target
-        else:
-            self._walk(node, file, in_tc, out, local_names)
-
-    @staticmethod
-    def _is_type_checking(test: ast.AST) -> bool:
-        if isinstance(test, ast.Name):
-            return test.id == "TYPE_CHECKING"
-        if isinstance(test, ast.Attribute):
-            return test.attr == "TYPE_CHECKING"
-        return False
-
-    def _absolute(self, dotted: str, file: Path, line: int, names: list[str], kind: str) -> RawImport:
-        top = dotted.split(".")[0]
-        if top == self.pkg:
-            return RawImport(dotted, names, kind, line, absolute=True)
-        external = top not in self._stdlib and top != ""
-        return RawImport(None, names, kind, line, external=external)
-
-    # 상대 import 를 Python 의미 그대로 절대 경로로 바꾼다. 파일의 패키지 = 파일이 든 디렉토리
-    def _relative(self, level: int, module: str | None, file: Path, line: int, names: list[str], kind: str) -> RawImport:
-        rel_dir = file.parent.relative_to(self.layout.package_root)
-        parts = [self.pkg, *rel_dir.parts]
-        up = level - 1
-        if up > len(parts) - 1:
-            return RawImport(None, names, kind, line)
-        base = parts[: len(parts) - up]
-        if module:
-            base = base + module.split(".")
-        return RawImport(".".join(base), names, kind, line)
 
     # 모듈 m 의 관점에서 raw import 를 간선으로 바꾼다
     def _resolve(self, m: ModuleRef, file: Path, raw: RawImport) -> None:

@@ -58,16 +58,15 @@ class Checker:
         for layer in self.surface.layer_names():
             for name, owners in sorted(self.surface.of_layer(layer)[1].items()):
                 for o in owners:
-                    add(("C2", o, layer, name), Violation("C2", o, g.modules[o].path / "__init__.py", 0,
+                    add(("C2", o, layer, name), Violation("C2", o, self.surface.module_file(o), 0,
                         f"같은 층에서 공개 이름이 겹친다: {name} ({', '.join(owners)}). 한쪽 이름을 바꾼다"))
         for name, m in g.modules.items():
             computed = g.computed_layer(name)
             if computed != m.layer and not m.parse_errors:
-                out.append(Violation("C3", name, m.path / "__init__.py", 0,
+                out.append(Violation("C3", name, self.surface.module_file(name), 0,
                                      f"선언 l{m.layer}, 계산 l{computed}. lnt move {name} l{computed}"))
         for cyc in g.cycles():
-            first = g.modules[cyc[0]]
-            out.append(Violation("C4", cyc[0], first.path / "__init__.py", 0,
+            out.append(Violation("C4", cyc[0], self.surface.module_file(cyc[0]), 0,
                                  "모듈 간 순환: " + " -> ".join(cyc + [cyc[0]])))
         if only is not None:
             out = [v for v in out if v.module in only]

@@ -4,11 +4,14 @@ from lntools.l0.project_layout import ProjectLayout
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
 from lntools.l1.surface import Surface
+from lntools.l1.python import PythonLanguage
+
+LANG = PythonLanguage()
 
 
 def _surface(layout: ProjectLayout) -> Surface:
-    modules, _ = Scanner(layout).scan()
-    return Surface(layout, modules)
+    modules, _ = Scanner(layout, LANG).scan()
+    return Surface(layout, modules, LANG)
 
 
 def test_simple_module_publishes_classes_and_type_aliases_only(layout: ProjectLayout):
@@ -25,17 +28,17 @@ def test_simple_module_publishes_classes_and_type_aliases_only(layout: ProjectLa
 
 # 중첩 모듈의 표면은 안쪽 맨 위 층. 아래 층의 TickSnapshot 은 보이지 않는다
 def test_nested_module_publishes_top_inner_layer(layout: ProjectLayout, graph: Graph):
-    assert Surface(layout, graph.modules).of_module("l3.portfolio") == {"Store": "l1.store"}
+    assert Surface(layout, graph.modules, LANG).of_module("l3.portfolio") == {"Store": "l1.store"}
 
 
 def test_layer_surface_and_collisions(layout: ProjectLayout, graph: Graph):
-    names, collisions = Surface(layout, graph.modules).of_layer("l1")
+    names, collisions = Surface(layout, graph.modules, LANG).of_layer("l1")
     assert names == {"EmailNotifier": "email_notifier", "Order": "order", "Pair": "pair", "Wallet": "wallet"}
     assert collisions == {}
 
 
 def test_render_formats(layout: ProjectLayout, graph: Graph):
-    s = Surface(layout, graph.modules)
+    s = Surface(layout, graph.modules, LANG)
     out = s.render()
     pkg = layout.package_root
     assert out[pkg / "l1" / "order" / "__init__.py"] == '# 모듈 표면. lnt doc 이 생성한다\nfrom .order import Order\n\n__all__ = ["Order"]\n'
@@ -48,7 +51,7 @@ def test_render_formats(layout: ProjectLayout, graph: Graph):
 
 # 생성한 지연 로드 __init__ 이 실제로 import 된다
 def test_rendered_inits_import(layout: ProjectLayout, graph: Graph, monkeypatch):
-    for p, text in Surface(layout, graph.modules).render().items():
+    for p, text in Surface(layout, graph.modules, LANG).render().items():
         p.write_text(text, encoding="utf-8")
     monkeypatch.syspath_prepend(str(layout.src_dir))
     import importlib
@@ -68,4 +71,4 @@ def test_unreadable_file_is_reported(layout: ProjectLayout):
 
 # 패키지 루트 표면은 맨 위 층의 표면. 중첩 모듈과 같은 규칙
 def test_root_publishes_top_layer(layout: ProjectLayout, graph: Graph):
-    assert Surface(layout, graph.modules).of_root() == {"App": "l4.app"}
+    assert Surface(layout, graph.modules, LANG).of_root() == {"App": "l4.app"}

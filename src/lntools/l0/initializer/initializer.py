@@ -2,16 +2,16 @@ import json
 from importlib import resources
 from pathlib import Path
 
-# 프로젝트에 코딩 프로토콜을 설치한다. 문서 복사, CLAUDE.md, 훅 병합, 스킬 설치
+# 프로젝트에 코딩 프로토콜을 설치한다. 문서 복사(공통 + 언어), CLAUDE.md, 훅 병합, 스킬 설치
 class Initializer:
-    PROTOCOL_FILES = [
-        "for-agent-codingprotocol-ln-structure.md",
-    ]
+    COMMON_DOC = "for-agent-codingprotocol-ln-structure.md"
     # 0.3 까지의 훅 명령. 활성화된 python 에 기대므로 lnt 로 바꾼다
     LEGACY_HOOK_PREFIX = "python -m lntools hook "
 
-    def __init__(self, project_root: Path, home: Path | None = None):
+    # language_doc: 언어별 프로토콜 문서 파일 이름 (lntools/protocol 안)
+    def __init__(self, project_root: Path, language_doc: str, home: Path | None = None):
         self.project_root = project_root
+        self.protocol_files = [self.COMMON_DOC, language_doc]
         self.home = home if home is not None else Path.home()
         self.claude_dir = project_root / ".claude"
 
@@ -23,7 +23,7 @@ class Initializer:
     def run(self) -> list[str]:
         done: list[str] = []
         self.claude_dir.mkdir(parents=True, exist_ok=True)
-        for name in self.PROTOCOL_FILES:
+        for name in self.protocol_files:
             (self.claude_dir / name).write_text(self._protocol(name), encoding="utf-8")
             done.append(f".claude/{name}")
         claude_md = self.project_root / "CLAUDE.md"

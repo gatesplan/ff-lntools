@@ -4,11 +4,14 @@ from lntools.l1.scanner import Scanner
 from lntools.l2.doc_generator import DocGenerator
 from lntools.l2.reviewer import Reviewer
 from lntools.l3.map_exporter import MapExporter
+from lntools.l1.python import PythonLanguage
+
+LANG = PythonLanguage()
 
 
 def _data(layout: ProjectLayout) -> dict:
-    modules, edges = Scanner(layout).scan()
-    return MapExporter(layout, Graph(modules, edges)).data()
+    modules, edges = Scanner(layout, LANG).scan()
+    return MapExporter(layout, Graph(modules, edges), LANG).data()
 
 
 def _module(data: dict, name: str) -> dict:
@@ -40,12 +43,12 @@ def test_violations_and_orphans_match_check_and_review(layout: ProjectLayout, gr
     assert len(d["violations"]) == 13
     assert {"code": "C5", "module": "l3.intruder", "file": "src/shop/l3/intruder/intruder.py", "line": 1} \
         == {k: v for k, v in next(v for v in d["violations"] if v["code"] == "C5").items() if k != "message"}
-    assert d["orphans"] == Reviewer(layout, graph).orphans()
+    assert d["orphans"] == Reviewer(layout, graph, LANG).orphans()
 
 
 # 책임은 layerinfo 에서. [설명 필요] 와 빈 줄은 null. 마커 없는 예전 손글씨 문서도 읽는다
 def test_responsibility_from_layerinfo(layout: ProjectLayout, graph: Graph):
-    docs = DocGenerator(layout, graph)
+    docs = DocGenerator(layout, graph, LANG)
     docs.write_all()
     p = docs.layerinfo_path("")
     p.write_text(p.read_text(encoding="utf-8").replace("- order: [설명 필요]", "- order: 주문 상태를 맡는다"), encoding="utf-8")

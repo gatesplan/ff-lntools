@@ -49,7 +49,8 @@ Why.
 - Agents start from the module map (one line of responsibility per module), query signatures with `lnt sig`, and read the code for detail
 
 Full rules (nested modules, mutual calls, dependency inversion, `__init__` patterns):
-[`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md) (Korean).
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md) (common) and
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md) (Python), both in Korean.
 
 ## 2. What the tool does
 
@@ -103,7 +104,8 @@ Creates:
 my-project/
   CLAUDE.md                                   # only if absent; points to the protocol doc
   .claude/
-    for-agent-codingprotocol-ln-structure.md  # the rules; read when needed, not injected every session
+    for-agent-codingprotocol-ln-structure.md         # language-neutral rules; read when needed, not injected every session
+    for-agent-codingprotocol-ln-structure-python.md  # how to apply them in Python: __init__ patterns, import syntax, examples
     settings.json                             # Claude Code hooks; only "hooks" is merged if the file exists
 ```
 

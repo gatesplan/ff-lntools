@@ -1,43 +1,20 @@
 from pathlib import Path
 
+from ...l0.language import Language
 from ...l0.module_ref import ModuleRef
 from ...l0.project_layout import ProjectLayout
-from ...l0.signature_extractor import SignatureExtractor
-
-MODULE_TEMPLATE = '''# 모듈 표면. lnt doc 이 생성한다
-{imports}__all__ = [{names}]
-'''
-
-LAZY_TEMPLATE = '''import importlib
-
-# {title}. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
-_EXPORTS = {{
-{entries}
-}}
-__all__ = list(_EXPORTS)
 
 
-def __getattr__(name: str):
-    if name in _EXPORTS:
-        mod = importlib.import_module(f".{{_EXPORTS[name]}}", __name__)
-        return getattr(mod, name)
-    raise AttributeError(name)
-'''
-
-
-# 표면 계산과 __init__.py 생성
+# 표면 계산과 표면 파일(__init__.py 등) 내용. 파일 모양은 language 가 정한다
 # 단순 모듈: 자기 파일의 공개 클래스와 타입 별칭. 중첩 모듈: 안쪽 맨 위 층의 표면. 층: 그 층 모듈들의 표면 합
 # 패키지 루트: 맨 위 층의 표면. 패키지는 다른 프로젝트에 그대로 중첩 모듈로 들어갈 수 있으므로 규칙이 같다
 class Surface:
-    def __init__(self, layout: ProjectLayout, modules: dict[str, ModuleRef]):
+    def __init__(self, layout: ProjectLayout, modules: dict[str, ModuleRef], language: Language):
         self.layout = layout
         self.modules = modules
-        self.sig = SignatureExtractor()
+        self.language = language
+        self.unreadable: list[Path] = []   # 문법 오류로 표면을 읽지 못한 파일
         self._cache: dict[str, dict[str, str]] = {}
-
-    @property
-    def unreadable(self) -> list[Path]:
-        return self.sig.unreadable
 
     # 모듈 표면. 이름 -> 모듈 폴더 기준 상대 경로 (단순 모듈은 파일 이름, 중첩 모듈은 l1.store 처럼 안쪽 모듈)
     def of_module(self, name: str) -> dict[str, str]:
@@ -45,7 +22,8 @@ class Surface:
             m = self.modules[name]
             out: dict[str, str] = {}
             if not m.is_nested:
-                out = self.sig.public_names(m.path)
+                out, bad = self.language.public_names(m.path)
+                self.unreadable.extend(f for f in bad if f not in self.unreadable)
             else:
                 out = self._top_layer_surface(name)
             self._cache[name] = out
@@ -81,29 +59,28 @@ class Surface:
         scope, _, base = layer_name.rpartition(".")
         return (self.modules[scope].path if scope else self.layout.package_root) / base
 
-    # 만들어야 할 __init__.py 경로와 내용. 패키지 루트 포함. 모듈이 없는 층 폴더는 빈 층 표면
+    # 표면 파일 경로
+    def module_file(self, name: str) -> Path:
+        m = self.modules[name]
+        return self.language.surface_path(m.path, "nested" if m.is_nested else "module")
+
+    def layer_file(self, layer_name: str) -> Path:
+        return self.language.surface_path(self.layer_dir(layer_name), "layer")
+
+    def root_file(self) -> Path:
+        return self.language.surface_path(self.layout.package_root, "root")
+
+    # 만들어야 할 표면 파일 경로와 내용. 패키지 루트 포함. 모듈이 없는 층 폴더는 빈 층 표면
     def render(self) -> dict[Path, str]:
-        out: dict[Path, str] = {self.layout.package_root / "__init__.py": self._lazy("패키지 표면: 맨 위 층", self.of_root())}
+        lang = self.language
+        out: dict[Path, str] = {self.root_file(): lang.render_surface(self.layout.package_root, "root", self.of_root())}
         for d in [self.layout.package_root] + [m.path for m in self.modules.values() if m.is_nested]:
             for c in sorted(d.iterdir()):
                 if c.is_dir() and ProjectLayout.LAYER_RE.match(c.name):
-                    out[c / "__init__.py"] = self._lazy("층 표면", {})
+                    out[lang.surface_path(c, "layer")] = lang.render_surface(c, "layer", {})
         for ln in self.layer_names():
-            out[self.layer_dir(ln) / "__init__.py"] = self._lazy("층 표면", self.of_layer(ln)[0])
+            out[self.layer_file(ln)] = lang.render_surface(self.layer_dir(ln), "layer", self.of_layer(ln)[0])
         for name, m in sorted(self.modules.items()):
-            surface = self.of_module(name)
-            out[m.path / "__init__.py"] = self._lazy("모듈 표면: 안쪽 맨 위 층", surface) if m.is_nested else self._eager(surface)
+            kind = "nested" if m.is_nested else "module"
+            out[self.module_file(name)] = lang.render_surface(m.path, kind, self.of_module(name))
         return out
-
-    @staticmethod
-    def _eager(surface: dict[str, str]) -> str:
-        by_file: dict[str, list[str]] = {}
-        for n, rel in sorted(surface.items()):
-            by_file.setdefault(rel, []).append(n)
-        imports = "".join(f"from .{rel} import {', '.join(ns)}\n" for rel, ns in sorted(by_file.items()))
-        return MODULE_TEMPLATE.format(imports=imports + "\n" if imports else "\n", names=", ".join(f'"{n}"' for n in sorted(surface)))
-
-    @staticmethod
-    def _lazy(title: str, surface: dict[str, str]) -> str:
-        entries = "\n".join(f'    "{n}": "{rel}",' for n, rel in sorted(surface.items()))
-        return LAZY_TEMPLATE.format(title=title, entries=entries)

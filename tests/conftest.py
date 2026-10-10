@@ -6,6 +6,9 @@ import pytest
 from lntools.l0.project_layout import ProjectLayout
 from lntools.l1.graph import Graph
 from lntools.l1.scanner import Scanner
+from lntools.l1.python import PythonLanguage
+
+LANG = PythonLanguage()
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample"
 
@@ -27,5 +30,5 @@ def layout(sample: Path) -> ProjectLayout:
 
 @pytest.fixture
 def graph(layout: ProjectLayout) -> Graph:
-    modules, edges = Scanner(layout).scan()
+    modules, edges = Scanner(layout, LANG).scan()
     return Graph(modules, edges)

@@ -1,4 +1,7 @@
 from lntools.l1.graph import Graph
+from lntools.l1.python import PythonLanguage
+
+LANG = PythonLanguage()
 
 
 def test_discovers_root_and_nested_modules(graph: Graph):
@@ -46,7 +49,7 @@ def test_surface_violation_records_extra(graph: Graph):
 def test_parse_errors_recorded_on_containing_modules(layout):
     from lntools.l1.scanner import Scanner
     (layout.package_root / "l3/portfolio/l1/store/store.py").write_text("def broken(\n", encoding="utf-8")
-    modules, _ = Scanner(layout).scan()
+    modules, _ = Scanner(layout, LANG).scan()
     for name in ["l3.portfolio", "l3.portfolio.l1.store"]:
         assert [e.lineno for e in modules[name].parse_errors] == [1]
     assert not modules["l3.portfolio.l0.tick_snapshot"].parse_errors
