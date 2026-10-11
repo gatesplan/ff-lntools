@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-# 규칙 위반 하나. code는 C1(방향) C2(표면) C3(층 일치) C4(순환) C5(상대 경로), E(파싱 실패). 풀이는 언어가 맡는다
+# 규칙 위반 하나. code는 C1(방향) C2(표면) C3(층 일치) C4(순환) C5(상대 경로) C6(덧붙이기 위치), E(파싱 실패). 풀이는 언어가 맡는다
 @dataclass
 class Violation:
     code: str

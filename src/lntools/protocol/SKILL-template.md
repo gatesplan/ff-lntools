@@ -7,7 +7,7 @@ user-invocable: true
 
 # Init Protocol
 
-`lnt init` 을 실행한다. 프로토콜 문서 복사, CLAUDE.md 생성, Claude Code 훅 병합을 한 번에 한다.
+`lnt init` 을 실행한다. 프로토콜 문서 복사, CLAUDE.md 생성, Claude Code 훅 병합을 한 번에 한다. 프로젝트 루트에 Cargo.toml 이 있으면 Rust 문서와 clippy.toml 설정을 둔다.
 
 ## 실행
 
@@ -22,5 +22,5 @@ lnt init
 
 ## 이후
 
-- `src/<pkg>/lN/` 구조를 만든 뒤 `lnt doc` 으로 layerinfo 문서를 생성한다
+- `src/<pkg>/lN/` (Rust 는 `src/lN/`) 구조를 만든 뒤 `lnt doc` 으로 layerinfo 와 표면 파일을 생성한다
 - `lnt check` 로 규칙을 확인한다. 훅이 편집마다 자동 실행한다

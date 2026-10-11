@@ -9,11 +9,14 @@ class ModuleRef:
     scope: str            # 소속 스코프. 루트는 "", 중첩 모듈 내부는 감싸는 모듈 이름
     layer: int            # 선언 층 (디렉토리 번호)
     path: Path            # 모듈 디렉토리
-    files: list[Path] = field(default_factory=list)   # 모듈에 속한 모든 .py (중첩 내부 포함)
+    files: list[Path] = field(default_factory=list)   # 모듈에 속한 모든 소스 파일 (중첩 내부 포함)
     has_external: bool = False                         # 표준 라이브러리 외 패키지 import 여부
     is_nested: bool = False                            # 내부에 lN 디렉토리를 가지는지
     parse_errors: list[SyntaxError] = field(default_factory=list)   # 파싱에 실패한 파일. 그 파일의 import 는 간선에 없다
     absolute_imports: list[tuple[Path, int, str]] = field(default_factory=list)   # 자기 패키지 절대 import (파일, 줄, 경로)
+    # 이 모듈(가장 안쪽 모듈인 파일만)의 덧붙이기. (파일, 줄, 머리 줄, inherent, 타입 모듈, 트레이트 모듈)
+    # 모듈 이름이 None 이면 패키지 밖이거나 정할 수 없는 대상
+    attachments: list[tuple[Path, int, str, bool, str | None, str | None]] = field(default_factory=list)
 
     @property
     def basename(self) -> str:

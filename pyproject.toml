@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ff-lntools"
-version = "0.5.0"
-description = "ln-structure checker, blast radius, doc generator and Claude Code hooks"
+version = "0.6.0"
+description = "ln-structure checker, blast radius, doc generator and Claude Code hooks for Python and Rust"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["tree-sitter>=0.25", "tree-sitter-rust>=0.24"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

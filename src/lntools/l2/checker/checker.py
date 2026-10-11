@@ -5,8 +5,10 @@ from ...l1.graph import Graph
 from ...l1.surface import Surface
 
 
-# C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로 검사. 파싱에 실패한 파일은 E 로 먼저 알린다
+# C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로, C6 덧붙이기 위치 검사. 파싱에 실패한 파일은 E 로 먼저 알린다
 # C2 는 셋: 표면을 지나 들어간 import, 표면에 없는 이름을 import, 같은 층에서 겹치는 공개 이름
+# C6: 덧붙이기(Rust 의 impl)는 타입의 모듈에, 트레이트 구현은 타입이나 트레이트의 모듈에 둔다.
+# 다른 곳에 두면 import 없이 그 코드를 부르게 되어 방향과 영향 범위가 보이지 않는다
 class Checker:
     def __init__(self, graph: Graph, surface: Surface):
         self.graph = graph
@@ -37,6 +39,11 @@ class Checker:
             for f, line, target in m.absolute_imports:
                 add(("C5", f, line), Violation("C5", m.name, f, line,
                     f"패키지 안 절대 import: {target}. 상대 경로로 쓴다"))
+            for f, line, text, inherent, type_mod, trait_mod in m.attachments:
+                if self._misplaced(m.name, inherent, type_mod, trait_mod):
+                    where = type_mod if inherent or trait_mod is None else f"{type_mod or '?'} 나 {trait_mod}"
+                    add(("C6", f, line), Violation("C6", m.name, f, line,
+                        f"덧붙이기 위치: {text}. {where} 모듈 안에 둔다"))
         for e in g.edges:
             src = g.modules[e.src]
             if e.counts_for_layer and e.dst_layer >= src.layer:
@@ -49,7 +56,7 @@ class Checker:
                 layer, _, name = e.target.rpartition(".")
                 if name not in self._layer_names(layer):
                     add(("C2", e.src, e.target), Violation("C2", e.src, e.file, e.line,
-                        f"층 표면에 없는 이름: {e.target}. lnt doc 으로 층 __init__ 을 다시 만들거나 모듈 표면에서 import"))
+                        f"층 표면에 없는 이름: {e.target}. lnt doc 으로 층 표면 파일을 다시 만들거나 모듈 표면에서 가져온다"))
             elif e.dst is not None and e.names:
                 missing = [n for n in e.names if n != "*" and n not in self.surface.of_module(e.dst)]
                 if missing:
@@ -70,5 +77,14 @@ class Checker:
                                  "모듈 간 순환: " + " -> ".join(cyc + [cyc[0]])))
         if only is not None:
             out = [v for v in out if v.module in only]
-        order = {"E": -1, "C1": 0, "C2": 1, "C3": 2, "C4": 3, "C5": 4}
+        order = {"E": -1, "C1": 0, "C2": 1, "C3": 2, "C4": 3, "C5": 4, "C6": 5}
         return sorted(out, key=lambda v: (order[v.code], v.module, v.line))
+
+    # 메서드 덧붙이기는 타입의 모듈만. 트레이트 구현은 타입이나 트레이트의 모듈. 둘 다 패키지 밖이면 검사하지 않는다
+    @staticmethod
+    def _misplaced(module: str, inherent: bool, type_mod: str | None, trait_mod: str | None) -> bool:
+        if inherent:
+            return type_mod is not None and type_mod != module
+        if type_mod is None and trait_mod is None:
+            return False
+        return module not in (type_mod, trait_mod)

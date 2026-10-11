@@ -10,6 +10,8 @@
 
 ## 디렉토리 구조
 
+`tests/` 는 이 문서가 쓰는 예시다. 테스트 위치는 ln 규칙이 아니다.
+
 ### 단순 모듈
 
 ```
@@ -275,9 +277,7 @@ project/
 - 표면: `__init__.py`
 
 ### 테스트
-- 위치: `tests/ln/modulename/`
-- 명명: `test_*.py`
-- 구조: 소스 미러
+테스트 위치는 ln 규칙이 아니다. 이 문서의 예시는 `tests/` 아래 소스 미러(`tests/ln/modulename/test_*.py`)다.
 
 ### 고아 판정에서 패키지 밖 쓰임으로 보는 것
 - 패키지 밖 파이썬 파일(app/, scripts/ 등. tests 제외)의 import

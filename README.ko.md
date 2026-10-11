@@ -1,10 +1,11 @@
 # ff-lntools
 [English](README.md) | 한국어
 
-AI 코딩 에이전트(Claude Code 등)와 함께 Python 프로젝트를 만들 때 쓰는 구조 규칙 **ln-structure** 와,
+AI 코딩 에이전트(Claude Code 등)와 함께 Python 과 Rust 프로젝트를 만들 때 쓰는 구조 규칙 **ln-structure** 와,
 그 규칙을 기계적으로 검사하고 문서를 생성하는 도구 `lnt`.
 
-표준 라이브러리만 사용. Python 3.10+. Windows / macOS / Linux.
+의존은 Rust 를 읽는 tree-sitter 뿐. Python 3.10+. Windows / macOS / Linux.
+프로젝트 루트에 `Cargo.toml` 이 있으면 Rust(라이브러리 크레이트 하나, 층은 `src/` 아래), 아니면 Python 으로 본다.
 
 
 ## 1. ln-structure 란
@@ -28,10 +29,10 @@ src/shop/
       __init__.py
   for-agent-layerinfo.md    # 전체 모듈 목록 (생성됨)
 tests/
-  l1/order/test_order.py    # src 와 같은 구조
+  l1/order/test_order.py    # 예시. 테스트 위치는 ln 규칙이 아니다
 ```
 
-규칙은 다섯 개다.
+규칙은 여섯 개다. C6 은 Rust 에만 걸린다.
 
 | 코드 | 규칙 |
 |---|---|
@@ -39,7 +40,8 @@ tests/
 | C2 | **표면**에 있는 이름만 import: 모듈(`shop.l1.order`)이나 층(`shop.l1`). 모듈 안 파일이나 중첩 모듈 내부로 들어가지 않고, 표면에 없는 이름을 가져오지 않으며, 같은 층의 두 모듈이 같은 이름을 공개하지 않음 |
 | C3 | 모듈의 층 = 의존하는 모듈의 최고 층 + 1. 의존이 없으면 l0. 외부 패키지를 쓰면 최소 l1 |
 | C4 | 모듈 간 순환 금지 |
-| C5 | 패키지 안 import 는 **상대 경로**(`from ...l1.order import Order`). 패키지가 다른 프로젝트에 중첩 모듈로 들어가도 그대로 동작 |
+| C5 | 패키지 안 import 는 **상대 경로**(`from ...l1.order import Order`). 패키지가 다른 프로젝트에 중첩 모듈로 들어가도 그대로 동작 (Rust 는 아직 검사하지 않음) |
+| C6 | Rust: `impl` 은 그 타입이나 트레이트의 모듈 안에만. 다른 모듈에서 덧붙이면 import 없이 그 코드를 부르게 된다 |
 
 왜 이렇게 하는가.
 
@@ -50,7 +52,8 @@ tests/
 
 상세 규칙(중첩 모듈, 상호 호출 처리, 의존성 역전, `__init__` 패턴)은
 [`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md)(공통),
-[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md)(Python).
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md)(Python),
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-rust.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-rust.md)(Rust).
 
 ## 2. 도구가 하는 일
 
@@ -79,7 +82,7 @@ uv tool install --python 3.14 ff-lntools
 
 `lnt` 가 사용자 bin 폴더(`~/.local/bin`)에 생겨서 어느 Python 환경이 활성화돼 있든 잡힌다. `pipx install ff-lntools` 도 같다.
 훅이 `lnt` 로 호출하므로 프로젝트의 venv, conda env 마다 깔 필요는 없다.
-lnt 는 대상 코드를 import 하지 않고 `ast` 로 읽기만 한다. ast 는 lnt 를 돌리는 Python 판의 문법을 따르므로,
+lnt 는 대상 코드를 import 하거나 빌드하지 않고 읽기만 한다. Rust 는 tree-sitter 로 읽는다. Python 은 `ast` 로 읽고, ast 는 lnt 를 돌리는 Python 판의 문법을 따르므로,
 프로젝트들이 쓰는 가장 높은 판 이상의 Python 을 고른다. `lnt` 가 PATH 에 없으면 훅은 "command not found" 로 실패한다.
 
 ### Claude Code 스킬 설치 (1회)
@@ -106,6 +109,7 @@ my-project/
   .claude/
     for-agent-codingprotocol-ln-structure.md         # 언어 공통 규칙. 세션마다 넣지 않고 필요할 때 읽는다
     for-agent-codingprotocol-ln-structure-python.md  # Python 에서 쓰는 법: __init__ 패턴, import 문법, 예시 코드
+                                              # (Rust 는 ...-rust.md 와 프로젝트 루트의 clippy.toml)
     settings.json                             # Claude Code 훅. 기존 설정이 있으면 hooks 만 병합
 ```
 

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from .raw_impl import RawImpl
 from .raw_import import RawImport
 
 
@@ -11,12 +12,17 @@ class Language(ABC):
     name: str = ""            # 언어 이름. 예: python
     suffix: str = ""          # 소스 파일 확장자. 예: .py
     protocol_doc: str = ""    # 이 언어의 프로토콜 문서 파일 이름 (lntools/protocol 안)
+    marker: str = ""          # 프로젝트 루트에 이 파일이 있으면 이 언어. 빈 문자열은 표시 파일이 없는 기본 언어
 
     # ---- 읽기 ----
 
     # 파일 하나의 import. 패키지 안 대상은 패키지명을 포함한 절대 점 경로로 푼다. 문법 오류는 SyntaxError 로 올린다
     @abstractmethod
     def read_imports(self, file: Path, package_root: Path) -> list[RawImport]: ...
+
+    # 파일 하나의 덧붙이기(Rust 의 impl). 덧붙이기 문법이 없는 언어는 빈 목록. 문법 오류는 SyntaxError 로 올린다
+    @abstractmethod
+    def read_impls(self, file: Path, package_root: Path) -> list[RawImpl]: ...
 
     # 지금 있는 표면 파일이 내보내는 이름 -> 표면 파일 폴더 기준 점 경로 (order, l4.cli)
     @abstractmethod
@@ -66,8 +72,12 @@ class Language(ABC):
     def rewrite_imports(self, file: Path, package_root: Path, module_dir: Path,
                         old_name: str, new_name: str, exports: set[str]) -> bool: ...
 
+    # lnt init 이 프로젝트 루트에 둘 언어 설정 파일. 파일 이름 -> 들어 있어야 할 줄들
+    @abstractmethod
+    def setup_files(self) -> dict[str, list[str]]: ...
+
     # ---- 안내 ----
 
-    # 위반 종류마다 해결 방법 한 줄. E, C1~C5 순서
+    # 위반 종류마다 해결 방법 한 줄. E, C1~C6 순서
     @abstractmethod
     def hints(self, codes: set[str]) -> list[str]: ...

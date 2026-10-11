@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from typing import Callable
 
 from ...l0.language import Language
 from ...l0.project_layout import ProjectLayout
@@ -13,10 +14,11 @@ from ...l2.doc_generator import DocGenerator
 
 
 # Claude Code 훅 진입. stdin JSON 을 읽고 exit code 와 출력 채널을 정한다
+# pick: 프로젝트 루트를 받아 그 프로젝트의 언어를 고른다 (고르는 기준은 cli 가 정한다)
 class HookRunner:
-    def __init__(self, stdin_text: str, cwd: Path, language: Language):
+    def __init__(self, stdin_text: str, cwd: Path, pick: Callable[[Path], Language]):
         self.cwd = cwd
-        self.language = language
+        self.pick = pick
         try:
             self.payload = json.loads(stdin_text) if stdin_text.strip() else {}
         except json.JSONDecodeError:
@@ -40,10 +42,11 @@ class HookRunner:
         if not file_path:
             return 0
         file = Path(file_path)
-        if file.suffix != self.language.suffix:
-            return 0
         layout = ProjectLayout.find(file)
         if layout is None:
+            return 0
+        self.language = self.pick(layout.project_root)
+        if file.suffix != self.language.suffix:
             return 0
         try:
             file.resolve().relative_to(layout.package_root)
@@ -74,7 +77,7 @@ class HookRunner:
         for d in docs.check(scopes):
             lines.append(f"문서 불일치: {d}. lnt doc 으로 재생성")
         for p in docs.stale_inits(names):
-            lines.append(f"__init__ 불일치: {p}. lnt doc 으로 재생성")
+            lines.append(f"표면 파일 불일치: {p}. lnt doc 으로 재생성")
         lines.extend(docs.unreadable_notices())
         lines.extend(docs.need_desc_notices(scopes))
         out = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "\n".join(lines)}}

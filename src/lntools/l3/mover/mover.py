@@ -53,11 +53,13 @@ class Mover:
             shutil.move(str(old_test), str(new_test))
             self.changed.append(f"이동 {self.layout.relative(old_test)} -> {self.layout.relative(new_test)}")
 
-        # 4. 표면 파일과 문서 재생성. 빈 층의 표면 파일도 비운다
+        # 4. 표면 파일과 문서 재생성. 빈 층의 표면 파일도 비운다. 쓰지 못한 표면 파일은 알림으로 전한다
         modules, edges = Scanner(self.layout, self.language).scan()
         graph = Graph(modules, edges)
-        for p in DocGenerator(self.layout, graph, self.language).write_all():
+        docs = DocGenerator(self.layout, graph, self.language)
+        for p in docs.write_all():
             self.changed.append(f"문서 {self.layout.relative(p)}")
+        self.changed.extend(f"주의: {n}" for n in docs.notices)
         self.changed.append(f"완료. lnt check 로 연쇄 이동 여부 확인 ({new_name})")
         return self.changed
 

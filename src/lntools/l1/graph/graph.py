@@ -15,11 +15,13 @@ class Graph:
             self._out.setdefault(e.src, []).append(e)
             if e.dst is not None:
                 self._in.setdefault(e.dst, []).append(e)
+        self._resolved: dict[Path, str] | None = None   # 모듈 폴더의 절대 경로 -> 모듈 이름. resolve 는 비싸서 한 번만
 
     # 파일을 포함하는 모듈들. 바깥 -> 안쪽 순서
     def modules_of(self, file: Path) -> list[ModuleRef]:
-        file = file.resolve()
-        found = [m for m in self.modules.values() if m.path.resolve() in file.parents]
+        if self._resolved is None:
+            self._resolved = {m.path.resolve(): n for n, m in self.modules.items()}
+        found = [self.modules[self._resolved[p]] for p in file.resolve().parents if p in self._resolved]
         return sorted(found, key=lambda m: len(m.name))
 
     def dependencies(self, name: str) -> list[Edge]:

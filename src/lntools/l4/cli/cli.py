@@ -6,7 +6,9 @@ from pathlib import Path
 from ...l0.initializer import Initializer
 from ...l0.project_layout import ProjectLayout
 from ...l1.graph import Graph
+from ...l0.language import Language
 from ...l1.python import PythonLanguage
+from ...l1.rust import RustLanguage
 from ...l1.scanner import Scanner
 from ...l1.surface import Surface
 from ...l2.blaster import Blaster
@@ -23,21 +25,27 @@ from ...l3.mover import Mover
 class Cli:
     def __init__(self, argv: list[str]):
         self.argv = argv
-        self.language = PythonLanguage()
+
+    # 프로젝트 루트에 표시 파일(Cargo.toml)이 있는 언어. 없으면 Python
+    @staticmethod
+    def language_for(project_root: Path) -> Language:
+        if (project_root / RustLanguage.marker).is_file():
+            return RustLanguage()
+        return PythonLanguage()
 
     def run(self) -> int:
         p = argparse.ArgumentParser(prog="lnt", description="ln-structure 도구")
         p.add_argument("--root", default=".", help="프로젝트 안의 아무 경로. 기본: 현재 디렉토리")
         sub = p.add_subparsers(dest="cmd", required=True)
 
-        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환 검사. 문법 오류 파일도 알린다")
+        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환, 덧붙이기 위치 검사. 문법 오류 파일도 알린다")
         c.add_argument("--file", help="이 파일을 포함하는 모듈의 위반만")
 
         b = sub.add_parser("blast", help="모듈 변경 시 영향 범위")
         b.add_argument("module")
         b.add_argument("-d", "--depth", type=int, default=1)
 
-        d = sub.add_parser("doc", help="layerinfo 와 표면 파일(모듈 표면, 층 표면) 생성/검사")
+        d = sub.add_parser("doc", help="layerinfo 와 표면 파일(모듈 표면, 층 표면, 패키지 표면) 생성/검사")
         d.add_argument("--check", action="store_true", help="생성 결과와 파일 비교만")
         d.add_argument("--stamp", metavar="MODULE", help="예전 moduleinfo 의 sources hash 갱신 (호환용). all 이면 문서가 있는 모든 모듈")
 
@@ -49,7 +57,7 @@ class Cli:
 
         sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출. 위반이 아니라 exit 0")
 
-        mv = sub.add_parser("move", help="모듈을 다른 층으로 이동. import, tests 미러, 층 __init__, 문서 갱신")
+        mv = sub.add_parser("move", help="모듈을 다른 층으로 이동. import, tests 미러, 표면 파일, 문서 갱신")
         mv.add_argument("module")
         mv.add_argument("layer", help="예: l2")
 
@@ -60,9 +68,10 @@ class Cli:
         i.add_argument("--skill", action="store_true", help="~/.claude/skills/init-protocol 스킬만 설치")
 
         args = p.parse_args(self.argv)
-        lang = self.language
         if args.cmd == "init":
-            ini = Initializer(Path(args.root).resolve(), lang.protocol_doc)
+            root = Path(args.root).resolve()
+            lang = self.language_for(root)
+            ini = Initializer(root, lang.protocol_doc, setup_files=lang.setup_files())
             if args.skill:
                 print(f"스킬 설치: {ini.install_skill()}")
                 return 0
@@ -74,13 +83,14 @@ class Cli:
             for stream in (sys.stdin, sys.stdout, sys.stderr):
                 if hasattr(stream, "reconfigure"):
                     stream.reconfigure(encoding="utf-8")
-            runner = HookRunner(sys.stdin.read(), Path.cwd(), lang)
+            runner = HookRunner(sys.stdin.read(), Path.cwd(), self.language_for)
             return runner.post_edit() if args.event == "post-edit" else runner.session_start()
 
         layout = ProjectLayout.find(Path(args.root))
         if layout is None:
-            sys.stderr.write("src/<pkg>/lN 구조를 찾지 못함\n")
+            sys.stderr.write("src/<pkg>/lN 이나 src/lN 구조를 찾지 못함\n")
             return 1
+        lang = self.language_for(layout.project_root)
         modules, edges = Scanner(layout, lang).scan()
         graph = Graph(modules, edges)
 

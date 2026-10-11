@@ -1,17 +1,16 @@
 from pathlib import Path
 
 from ...l0.edge import Edge
-from ...l0.language import Language, RawImport
+from ...l0.language import Language, RawImpl, RawImport
 from ...l0.module_ref import ModuleRef
 from ...l0.project_layout import ProjectLayout
 
 
-# src/<pkg>/ 를 훑어 모듈 목록과 의존 간선을 만든다. 파일을 읽는 일은 language 가 한다
+# 패키지 루트를 훑어 모듈 목록과 의존 간선, 덧붙이기를 만든다. 파일을 읽는 일은 language 가 한다
 class Scanner:
     def __init__(self, layout: ProjectLayout, language: Language):
         self.layout = layout
         self.language = language
-        self.pkg = layout.package_name
         self.modules: dict[str, ModuleRef] = {}
         self.edges: list[Edge] = []
         self._layer_exports: dict[str, dict[str, str]] = {}   # 층 이름 -> {공개 이름: 모듈 폴더명}
@@ -36,7 +35,35 @@ class Scanner:
             for f in m.files:
                 for raw in parsed[f]:
                     self._resolve(m, f, raw)
+        # 덧붙이기는 파일을 품은 가장 안쪽 모듈 하나에만 둔다
+        innermost: dict[Path, ModuleRef] = {}
+        for m in sorted(self.modules.values(), key=lambda x: len(x.name)):
+            for f in m.files:
+                innermost[f] = m
+        for f, m in sorted(innermost.items()):
+            if f in errors:
+                continue
+            for raw in self.language.read_impls(f, self.layout.package_root):
+                m.attachments.append((f, raw.line, raw.text, raw.inherent,
+                                      self._owner(m, raw.type_target), self._owner(m, raw.trait_target)))
         return self.modules, self.edges
+
+    # 덧붙이기 대상 경로가 정의된 모듈. "" 는 이 모듈. 감싸는 중첩 모듈의 표면을 가리키면 정할 수 없어 None
+    def _owner(self, m: ModuleRef, target: str | None) -> str | None:
+        if target is None:
+            return None
+        if target == "":
+            return m.name
+        rel = self._relative(target)
+        best = max((n for n in self.modules if rel == n or rel.startswith(n + ".")), key=len, default=None)
+        if best is None or m.name.startswith(best + "."):
+            return None
+        return best
+
+    # 패키지명을 포함한 절대 점 경로에서 패키지명을 뗀다. 패키지명 자리는 언어마다 다를 수 있다 (Rust 는 crate)
+    @staticmethod
+    def _relative(target: str) -> str:
+        return target.split(".", 1)[1] if "." in target else ""
 
     # 스코프 디렉토리에서 lN/모듈 을 찾고, 중첩 모듈은 재귀
     def _discover(self, scope_dir: Path, scope_name: str) -> None:
@@ -66,7 +93,7 @@ class Scanner:
             if raw.external and raw.kind == "runtime":
                 m.has_external = True
             return
-        rel = raw.target[len(self.pkg):].lstrip(".")
+        rel = self._relative(raw.target)
         # 같은 스코프 모듈 중 최장 접두 일치
         best: ModuleRef | None = None
         for cand in self.modules.values():

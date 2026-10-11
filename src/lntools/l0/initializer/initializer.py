@@ -2,16 +2,19 @@ import json
 from importlib import resources
 from pathlib import Path
 
-# 프로젝트에 코딩 프로토콜을 설치한다. 문서 복사(공통 + 언어), CLAUDE.md, 훅 병합, 스킬 설치
+# 프로젝트에 코딩 프로토콜을 설치한다. 문서 복사(공통 + 언어), CLAUDE.md, 훅 병합, 언어 설정 파일, 스킬 설치
 class Initializer:
     COMMON_DOC = "for-agent-codingprotocol-ln-structure.md"
     # 0.3 까지의 훅 명령. 활성화된 python 에 기대므로 lnt 로 바꾼다
     LEGACY_HOOK_PREFIX = "python -m lntools hook "
 
     # language_doc: 언어별 프로토콜 문서 파일 이름 (lntools/protocol 안)
-    def __init__(self, project_root: Path, language_doc: str, home: Path | None = None):
+    # setup_files: 프로젝트 루트에 둘 언어 설정 파일. 파일 이름 -> 들어 있어야 할 줄들
+    def __init__(self, project_root: Path, language_doc: str, home: Path | None = None,
+                 setup_files: dict[str, list[str]] | None = None):
         self.project_root = project_root
         self.protocol_files = [self.COMMON_DOC, language_doc]
+        self.setup_files = setup_files or {}
         self.home = home if home is not None else Path.home()
         self.claude_dir = project_root / ".claude"
 
@@ -33,6 +36,23 @@ class Initializer:
             claude_md.write_text(self._protocol("CLAUDE-template.md"), encoding="utf-8")
             done.append("CLAUDE.md 생성")
         done.append(self.merge_hooks())
+        done.extend(self.write_setup_files())
+        return done
+
+    # 언어 설정 파일. 없으면 만들고, 있으면 빠진 줄만 끝에 더한다
+    def write_setup_files(self) -> list[str]:
+        done: list[str] = []
+        for name, lines in self.setup_files.items():
+            p = self.project_root / name
+            text = p.read_text(encoding="utf-8") if p.is_file() else ""
+            missing = [ln for ln in lines if ln not in text.splitlines()]
+            if not missing:
+                done.append(f"{name} 이미 있음")
+                continue
+            if text and not text.endswith("\n"):
+                text += "\n"
+            p.write_text(text + "".join(ln + "\n" for ln in missing), encoding="utf-8")
+            done.append(f"{name} {'줄 추가' if text else '생성'}")
         return done
 
     # settings.json 의 hooks 에 템플릿 훅을 합친다. 옛 훅 명령은 lnt 로 바꾸고, 같은 command 가 이미 있으면 건너뛴다

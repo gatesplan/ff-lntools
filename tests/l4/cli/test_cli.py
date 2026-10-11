@@ -38,3 +38,18 @@ def test_map_json_is_utf8_json(sample: Path, capsysbinary):
     data = json.loads(capsysbinary.readouterr().out.decode("utf-8"))
     assert data["format"] == 1 and data["package"] == "shop"
     assert any("선언" in v["message"] for v in data["violations"])
+
+
+# 프로젝트 루트에 Cargo.toml 이 있으면 Rust, 아니면 Python
+def test_language_for_project(tmp_path: Path):
+    assert Cli.language_for(tmp_path).name == "python"
+    (tmp_path / "Cargo.toml").write_text("[package]\nname = \"x\"\n", encoding="utf-8")
+    assert Cli.language_for(tmp_path).name == "rust"
+
+
+# Rust 크레이트에 init: Rust 문서와 clippy 설정을 둔다
+def test_init_rust_project(tmp_path: Path, capsys):
+    (tmp_path / "Cargo.toml").write_text("[package]\nname = \"x\"\n", encoding="utf-8")
+    assert Cli(["--root", str(tmp_path), "init"]).run() == 0
+    assert (tmp_path / ".claude" / "for-agent-codingprotocol-ln-structure-rust.md").is_file()
+    assert "allow-private-module-inception = true" in (tmp_path / "clippy.toml").read_text(encoding="utf-8")

@@ -2,10 +2,11 @@
 
 English | [한국어](README.ko.md)
 
-**ln-structure**, a layout rule for Python projects built with AI coding agents (Claude Code and others),
+**ln-structure**, a layout rule for Python and Rust projects built with AI coding agents (Claude Code and others),
 and `lnt`, the tool that checks the rule mechanically and generates the navigation docs.
 
-Standard library only. Python 3.10+. Windows / macOS / Linux.
+Depends only on tree-sitter (to read Rust). Python 3.10+. Windows / macOS / Linux.
+A project with `Cargo.toml` at its root is treated as Rust (one library crate, layers under `src/`); otherwise Python.
 
 ## 1. What ln-structure is
 
@@ -28,10 +29,10 @@ src/shop/
       __init__.py
   for-agent-layerinfo.md    # module map (generated)
 tests/
-  l1/order/test_order.py    # mirrors src
+  l1/order/test_order.py    # example. Test placement is not an ln rule
 ```
 
-Five rules.
+Six rules. C6 applies to Rust only.
 
 | Code | Rule |
 |---|---|
@@ -39,7 +40,8 @@ Five rules.
 | C2 | Import only names on a **surface**: a module (`shop.l1.order`) or a layer (`shop.l1`). Never reach into a module's files or a nested module's internals, never import a name the surface does not publish, and no two modules in one layer may publish the same name |
 | C3 | A module's layer = max(layer of its dependencies) + 1. No dependencies means l0. Any third-party package means at least l1 |
 | C4 | No cycles between modules |
-| C5 | Imports inside the package are **relative** (`from ...l1.order import Order`), so the package still works when nested inside another project |
+| C5 | Imports inside the package are **relative** (`from ...l1.order import Order`), so the package still works when nested inside another project (not checked for Rust yet) |
+| C6 | Rust: an `impl` lives in the module of its type or trait. Attached elsewhere, its code runs without any import showing it |
 
 Why.
 
@@ -50,7 +52,8 @@ Why.
 
 Full rules (nested modules, mutual calls, dependency inversion, `__init__` patterns):
 [`src/lntools/protocol/for-agent-codingprotocol-ln-structure.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure.md) (common) and
-[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md) (Python), both in Korean.
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-python.md) (Python),
+[`src/lntools/protocol/for-agent-codingprotocol-ln-structure-rust.md`](src/lntools/protocol/for-agent-codingprotocol-ln-structure-rust.md) (Rust), all in Korean.
 
 ## 2. What the tool does
 
@@ -79,7 +82,8 @@ uv tool install --python 3.14 ff-lntools
 
 This puts `lnt` in your user bin folder (`~/.local/bin`), so it is found whichever Python environment is active.
 `pipx install ff-lntools` works the same way. The hooks call `lnt`, so there is no need to install it into each project's venv or conda env.
-lnt never imports the target code; it only parses it with `ast`, which follows the grammar of the Python running lnt.
+lnt never imports or builds the target code. It parses Python with `ast`, which follows the grammar of the Python running lnt,
+and Rust with tree-sitter.
 Pick a Python at least as new as the newest one your projects use. If `lnt` is not on PATH, the hooks fail with "command not found".
 
 ### Install the Claude Code skill (once)
@@ -106,6 +110,7 @@ my-project/
   .claude/
     for-agent-codingprotocol-ln-structure.md         # language-neutral rules; read when needed, not injected every session
     for-agent-codingprotocol-ln-structure-python.md  # how to apply them in Python: __init__ patterns, import syntax, examples
+                                              # (Rust: ...-rust.md, plus clippy.toml at the project root)
     settings.json                             # Claude Code hooks; only "hooks" is merged if the file exists
 ```
 

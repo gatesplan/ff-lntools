@@ -65,3 +65,15 @@ def test_install_skill(tmp_path: Path):
     p = Initializer(tmp_path, LANG.protocol_doc, home=tmp_path / "home").install_skill()
     assert p == tmp_path / "home" / ".claude" / "skills" / "init-protocol" / "SKILL.md"
     assert "lnt init" in p.read_text(encoding="utf-8")
+
+
+# 언어 설정 파일: 없으면 만들고, 있으면 빠진 줄만 더한다
+def test_setup_files_created_then_completed(tmp_path: Path):
+    setup = {"clippy.toml": ["allow-private-module-inception = true"]}
+    ini = Initializer(tmp_path, LANG.protocol_doc, home=tmp_path / "home", setup_files=setup)
+    assert ini.write_setup_files() == ["clippy.toml 생성"]
+    assert ini.write_setup_files() == ["clippy.toml 이미 있음"]
+    (tmp_path / "clippy.toml").write_text("too-many-arguments-threshold = 9", encoding="utf-8")
+    assert ini.write_setup_files() == ["clippy.toml 줄 추가"]
+    assert (tmp_path / "clippy.toml").read_text(encoding="utf-8") == \
+        "too-many-arguments-threshold = 9\nallow-private-module-inception = true\n"

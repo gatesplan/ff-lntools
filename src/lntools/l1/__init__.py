@@ -4,6 +4,7 @@ import importlib
 _EXPORTS = {
     "Graph": "graph",
     "PythonLanguage": "python",
+    "RustLanguage": "rust",
     "Scanner": "scanner",
     "Surface": "surface",
 }

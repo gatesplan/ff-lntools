@@ -121,7 +121,7 @@ class DocGenerator:
             kept = self._still_defined(p)
             if kept:
                 self.notices.append(f"{self.layout.relative(p)}: 지울 수 없는 정의가 있어 쓰지 않음 ({', '.join(kept)}). "
-                                    "함수와 상수는 클래스 안으로, __init__ 안 코드는 모듈 파일로 옮기고, "
+                                    "함수와 상수는 클래스(타입) 안으로, 표면 파일 안 코드는 모듈 파일로 옮기고, "
                                     "이 경로로 import 하던 곳은 그 이름이 있는 모듈 표면에서 import 하게 고친다. "
                                     "고친 뒤에도 이 알림이 나오면 이 파일을 지우고 다시 lnt doc")
                 continue
@@ -165,12 +165,19 @@ class DocGenerator:
         top = max((m.layer for m in roots), default=None)
         return [m for m in roots if m.layer == top]
 
-    # 쓰면 사라지는 정의. 지금 __init__ 이 내보내는데 새 표면에는 없고 아직 패키지 어딘가에 정의된 이름,
-    # 그리고 __init__ 파일 안에 직접 정의된 코드(생성 형식이 쓰는 이름은 빼고)
+    # 쓰면 사라지는 정의. 지금 표면 파일이 내보내는데 새 표면에는 없고 아직 패키지 어딘가에 정의된 이름,
+    # 그리고 표면 파일 안에 직접 정의된 코드(생성 형식이 쓰는 이름은 빼고)
+    # 내보내던 경로의 파일이나 폴더가 이미 없으면(모듈을 옮겼거나 지웠으면) 그 이름은 이 파일에서 이미 사라진 것이라 막지 않는다
     def _still_defined(self, init: Path) -> list[str]:
-        dropped = set(self.language.read_exports(init)) - self._new_names(init)
+        exports = self.language.read_exports(init)
+        dropped = {n for n in set(exports) - self._new_names(init) if self._target_exists(init.parent, exports[n])}
         own_code = self.language.own_definitions(init)
         return sorted((dropped & self._package_defs()) | own_code)
+
+    # 표면 파일 폴더 기준 점 경로(order, l1.store)가 가리키는 폴더나 소스 파일이 있는지
+    def _target_exists(self, folder: Path, rel: str) -> bool:
+        p = folder.joinpath(*rel.split("."))
+        return p.is_dir() or p.with_name(p.name + self.language.suffix).is_file()
 
     # 새로 만들 __init__ 이 내보낼 이름
     def _new_names(self, init: Path) -> set[str]:
