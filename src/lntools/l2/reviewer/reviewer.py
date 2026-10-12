@@ -125,7 +125,7 @@ class Reviewer:
             out.extend(f"  {n}/{f}: 클래스 {k}개" for n, f, k in crowded)
         leaks = self.leaks()
         if leaks:
-            out.append("숨은 타입 노출: 중첩 모듈의 공개 시그니처가 표면에 없는 타입을 쓴다. 맨 위 층으로 올리거나 중첩 모듈 밖으로 뺀다")
+            out.append("숨은 타입 노출: 중첩 모듈의 공개 시그니처가 표면에 없는 타입을 쓴다. 맨 위 층으로 올리거나, 맨 위 층 모듈에서 꺼내 주거나(타입 별칭, Rust 트레이트는 pub use), 중첩 모듈 밖으로 뺀다")
             out.extend(f"  {n}: {h} ({src})" for n, h, src in leaks)
         out.append(f"점검 대상 {len(found) + len(orphans) + len(crowded) + len(leaks)}건")
         return out

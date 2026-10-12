@@ -7,6 +7,8 @@
 - 모듈이 공개하는 이름은 클래스와 타입 별칭(`Answer = Union[A, B]`, `Maybe = A | None`, `type X = ...`)뿐이다
 - 함수는 메서드로(`@staticmethod`, `@classmethod`), 상수는 클래스 속성으로 둔다
 - 이름이나 파일 이름이 `_`로 시작하면 비공개다
+- 중첩 모듈 맨 위 층 모듈이 아래 층 클래스를 꺼내 줄 때는 `TypeAlias` 로 쓴다. 그냥 대입(`Env = _Env`)은 공개 이름이 아니다
+  (`from ...l1.eval import Env as _Env` 뒤에 `Env: TypeAlias = _Env`). 같은 객체라 바깥에서 상속해도 된다
 
 ## 디렉토리 구조
 
