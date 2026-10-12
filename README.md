@@ -6,7 +6,7 @@ English | [한국어](README.ko.md)
 and `lnt`, the tool that checks the rule mechanically and generates the navigation docs.
 
 Depends only on tree-sitter (to read Rust). Python 3.10+. Windows / macOS / Linux.
-A project with `Cargo.toml` at its root is treated as Rust (one library crate, layers under `src/`); otherwise Python.
+Each package picks its language from its own sources (`.py` or `.rs`). When that is not decisive, a project with `Cargo.toml` at its root is treated as Rust (one library crate, layers under `src/`); otherwise Python.
 
 ## 1. What ln-structure is
 
@@ -65,7 +65,7 @@ is checked and violations come back as errors.
 | `lnt init` | Install protocol docs, `CLAUDE.md` and Claude Code hooks into a project |
 | `lnt check` | C1-C5, plus files that fail to parse. Exit 1 on violation |
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
-| `lnt map [--json]` | Modules, layers, dependencies at a glance. `--json` emits modules, edges, violations and orphans for tools that draw the map |
+| `lnt map [--json]` | Modules, layers, dependencies at a glance. `--json` emits modules, edges, violations and orphans for tools that draw the map, one map per package under `src/` |
 | `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |
 | `lnt review` | Things worth a look, not violations: bypassing dependencies, modules nothing uses, files with more than one class, nested modules leaking hidden types. Always exit 0 |
 | `lnt doc` | Generate the module map (`for-agent-layerinfo.md`) and every `__init__.py`, the package root included (module, layer and package surfaces) |

@@ -5,7 +5,7 @@ AI 코딩 에이전트(Claude Code 등)와 함께 Python 과 Rust 프로젝트�
 그 규칙을 기계적으로 검사하고 문서를 생성하는 도구 `lnt`.
 
 의존은 Rust 를 읽는 tree-sitter 뿐. Python 3.10+. Windows / macOS / Linux.
-프로젝트 루트에 `Cargo.toml` 이 있으면 Rust(라이브러리 크레이트 하나, 층은 `src/` 아래), 아니면 Python 으로 본다.
+언어는 패키지마다 그 안의 소스(`.py`, `.rs`)로 고른다. 그것으로 가를 수 없으면 프로젝트 루트에 `Cargo.toml` 이 있을 때 Rust(라이브러리 크레이트 하나, 층은 `src/` 아래), 아니면 Python 으로 본다.
 
 
 ## 1. ln-structure 란
@@ -65,7 +65,7 @@ tests/
 | `lnt init` | 프로젝트에 프로토콜 문서, `CLAUDE.md`, Claude Code 훅 설치 |
 | `lnt check` | C1~C5 검사와 문법 오류 파일. 위반 시 exit 1 |
 | `lnt blast MODULE` | 이 모듈을 고치면 영향받는 상위 모듈 목록 |
-| `lnt map [--json]` | 모듈 목록, 층, 의존 한눈에. `--json` 은 모듈, 간선, 위반, 고아를 지도 그리는 도구용 JSON 으로 |
+| `lnt map [--json]` | 모듈 목록, 층, 의존 한눈에. `--json` 은 모듈, 간선, 위반, 고아를 지도 그리는 도구용 JSON 으로. `src/` 아래 패키지마다 지도 하나 |
 | `lnt sig [대상]` | 층이나 모듈의 공개 시그니처. 저장하지 않고 그 자리에서 계산 |
 | `lnt review` | 위반은 아니지만 볼 만한 것: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 중첩 모듈의 숨은 타입 노출. 항상 exit 0 |
 | `lnt doc` | 모듈 지도(`for-agent-layerinfo.md`)와 패키지 루트까지 모든 `__init__.py`(모듈, 층, 패키지 표면) 생성 |

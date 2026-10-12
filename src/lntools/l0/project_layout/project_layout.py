@@ -34,8 +34,15 @@ class ProjectLayout:
         return any(c.is_dir() and ProjectLayout.LAYER_RE.match(c.name) for c in d.iterdir())
 
     # start(파일 또는 디렉토리)에서 위로 올라가며 src/<pkg>/lN 이나 src/lN 을 가진 프로젝트를 찾는다
+    # 시작 위치를 포함하는 패키지, 없으면 이름순 첫 패키지
     @classmethod
     def find(cls, start: Path) -> "ProjectLayout | None":
+        found = cls.find_all(start)
+        return found[0] if found else None
+
+    # find 와 같은 프로젝트의 ln 패키지 전부, 이름순. 시작 위치가 한 패키지 안이면 그 패키지 하나
+    @classmethod
+    def find_all(cls, start: Path) -> "list[ProjectLayout]":
         start = start.resolve()
         if start.is_file():
             start = start.parent
@@ -46,14 +53,13 @@ class ProjectLayout:
             candidates = [c for c in sorted(src.iterdir()) if cls.has_layers(c)]
             if not candidates:
                 if cls.has_layers(src):
-                    return cls(p, src)
+                    return [cls(p, src)]
                 continue
-            # 시작 위치를 포함하는 패키지 우선
             for c in candidates:
                 if start == c or c in start.parents:
-                    return cls(p, c)
-            return cls(p, candidates[0])
-        return None
+                    return [cls(p, c)]
+            return [cls(p, c) for c in candidates]
+        return []
 
     def relative(self, path: Path) -> str:
         try:

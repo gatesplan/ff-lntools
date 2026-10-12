@@ -1,6 +1,8 @@
 import json
+import shutil
 from pathlib import Path
 
+from lntools.l0.project_layout import ProjectLayout
 from lntools.l4.cli import Cli
 
 
@@ -36,8 +38,46 @@ def test_doc_writes_layerinfo_only(sample: Path, capsys):
 def test_map_json_is_utf8_json(sample: Path, capsysbinary):
     assert Cli(["--root", str(sample), "map", "--json"]).run() == 0
     data = json.loads(capsysbinary.readouterr().out.decode("utf-8"))
-    assert data["format"] == 1 and data["package"] == "shop"
-    assert any("선언" in v["message"] for v in data["violations"])
+    assert data["format"] == 2 and [p["package"] for p in data["packages"]] == ["shop"]
+    assert any("선언" in v["message"] for v in data["packages"][0]["violations"])
+
+
+FIXTURES = Path(__file__).parents[2] / "fixtures"
+
+
+# Python 패키지, Rust 크레이트, 읽을 소스가 없는 패키지가 src/ 아래 함께 있는 프로젝트. 루트에 Cargo.toml 은 없다
+def _mixed(tmp_path: Path) -> Path:
+    root = tmp_path / "mixed"
+    shutil.copytree(FIXTURES / "sample" / "src" / "shop", root / "src" / "shop", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(FIXTURES / "rust_clean" / "src", root / "src" / "kit")
+    js = root / "src" / "web" / "l0" / "chart"
+    js.mkdir(parents=True)
+    (js / "chart.js").write_text("export const chart = 1;\n", encoding="utf-8")
+    return root
+
+
+# src/ 아래 ln 패키지마다 지도 하나. 언어는 패키지마다, 읽을 소스가 없으면 null
+def test_map_json_lists_every_package(tmp_path: Path, capsysbinary):
+    root = _mixed(tmp_path)
+    assert Cli(["--root", str(root), "map", "--json"]).run() == 0
+    data = json.loads(capsysbinary.readouterr().out.decode("utf-8"))
+    got = {p["package"]: (p["language"], p["package_root"], len(p["modules"]) > 0) for p in data["packages"]}
+    assert got == {"kit": ("rust", "src/kit", True), "shop": ("python", "src/shop", True), "web": (None, "src/web", False)}
+
+
+# --root 가 패키지 하나 안이면 그 패키지만
+def test_map_json_root_inside_package(tmp_path: Path, capsysbinary):
+    root = _mixed(tmp_path)
+    assert Cli(["--root", str(root / "src" / "kit"), "map", "--json"]).run() == 0
+    data = json.loads(capsysbinary.readouterr().out.decode("utf-8"))
+    assert [(p["package"], p["language"]) for p in data["packages"]] == [("kit", "rust")]
+
+
+# 패키지의 언어는 그 안의 소스로. 소스가 없으면 프로젝트 루트 표시 파일로
+def test_language_of_package(tmp_path: Path):
+    los = {lo.package_name: lo for lo in ProjectLayout.find_all(_mixed(tmp_path))}
+    assert (Cli.language_of(los["shop"]).name, Cli.language_of(los["kit"]).name) == ("python", "rust")
+    assert Cli.sources_language(los["web"]) is None and Cli.language_of(los["web"]).name == "python"
 
 
 # 프로젝트 루트에 Cargo.toml 이 있으면 Rust, 아니면 Python

@@ -11,7 +11,7 @@ LANG = PythonLanguage()
 
 def _data(layout: ProjectLayout) -> dict:
     modules, edges = Scanner(layout, LANG).scan()
-    return MapExporter(layout, Graph(modules, edges), LANG).data()
+    return MapExporter(layout, Graph(modules, edges), LANG).package()
 
 
 def _module(data: dict, name: str) -> dict:
@@ -20,7 +20,7 @@ def _module(data: dict, name: str) -> dict:
 
 def test_header_and_paths_are_project_relative(layout: ProjectLayout):
     d = _data(layout)
-    assert (d["format"], d["package"], d["package_root"]) == (1, "shop", "src/shop")
+    assert (d["package"], d["package_root"], d["language"]) == ("shop", "src/shop", "python")
     store = _module(d, "l3.portfolio.l1.store")
     assert store["path"] == "src/shop/l3/portfolio/l1/store"
     assert (store["scope"], store["layer"], store["computed"], store["nested"]) == ("l3.portfolio", 1, 1, False)
@@ -65,3 +65,10 @@ def test_parse_error_module(layout: ProjectLayout):
     d = _data(layout)
     assert _module(d, "l2.service")["computed"] is None
     assert [v["module"] for v in d["violations"] if v["code"] == "E"] == ["l2.service"]
+
+
+# 읽을 소스가 없는 패키지는 언어 null, 빈 지도. 문서는 패키지 목록을 format 2 로 감싼다
+def test_unreadable_package_and_document(layout: ProjectLayout):
+    empty = MapExporter.unreadable(layout)
+    assert (empty["package"], empty["language"], empty["modules"], empty["edges"]) == ("shop", None, [], [])
+    assert MapExporter.document([empty]) == {"format": 2, "packages": [empty]}

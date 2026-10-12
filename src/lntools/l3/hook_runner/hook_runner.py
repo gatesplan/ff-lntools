@@ -14,9 +14,9 @@ from ...l2.doc_generator import DocGenerator
 
 
 # Claude Code 훅 진입. stdin JSON 을 읽고 exit code 와 출력 채널을 정한다
-# pick: 프로젝트 루트를 받아 그 프로젝트의 언어를 고른다 (고르는 기준은 cli 가 정한다)
+# pick: 패키지 위치를 받아 그 패키지의 언어를 고른다 (고르는 기준은 cli 가 정한다)
 class HookRunner:
-    def __init__(self, stdin_text: str, cwd: Path, pick: Callable[[Path], Language]):
+    def __init__(self, stdin_text: str, cwd: Path, pick: Callable[[ProjectLayout], Language]):
         self.cwd = cwd
         self.pick = pick
         try:
@@ -45,7 +45,7 @@ class HookRunner:
         layout = ProjectLayout.find(file)
         if layout is None:
             return 0
-        self.language = self.pick(layout.project_root)
+        self.language = self.pick(layout)
         if file.suffix != self.language.suffix:
             return 0
         try:

@@ -8,11 +8,11 @@ from ...l2.checker import Checker
 from ...l2.doc_generator import DocGenerator
 from ...l2.reviewer import Reviewer
 
-FORMAT = 1
+FORMAT = 2
 
 
 # lnt map --json. 지도를 그리는 쪽이 ln 규칙을 따로 해석하지 않도록 층, 의존, 위반, 고아 판정을 그대로 싣는다
-# 경로는 모두 프로젝트 루트 기준, / 구분
+# 패키지마다 지도 하나: {"format": 2, "packages": [package(), ...]}. 경로는 모두 프로젝트 루트 기준, / 구분
 class MapExporter:
     def __init__(self, layout: ProjectLayout, graph: Graph, language: Language):
         self.layout = layout
@@ -20,15 +20,25 @@ class MapExporter:
         self.language = language
         self._innermost: dict[Path, str | None] = {}
 
-    def data(self) -> dict:
+    @staticmethod
+    def document(packages: list[dict]) -> dict:
+        return {"format": FORMAT, "packages": packages}
+
+    # 읽을 소스가 없는 ln 패키지. 언어는 null, 지도는 비어 있다
+    @staticmethod
+    def unreadable(layout: ProjectLayout) -> dict:
+        return {"package": layout.package_name, "package_root": layout.relative(layout.package_root), "language": None,
+                "modules": [], "edges": [], "violations": [], "orphans": []}
+
+    def package(self) -> dict:
         g = self.graph
         rel = self.layout.relative
         resp = DocGenerator(self.layout, g, self.language).responsibilities()
         modules = sorted(g.modules.values(), key=lambda m: (m.scope, m.layer, m.name))
         return {
-            "format": FORMAT,
             "package": self.layout.package_name,
             "package_root": rel(self.layout.package_root),
+            "language": self.language.name,
             "modules": [{
                 "name": m.name, "scope": m.scope, "layer": m.layer,
                 "computed": None if m.parse_errors else g.computed_layer(m.name),

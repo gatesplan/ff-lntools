@@ -33,6 +33,21 @@ class Cli:
             return RustLanguage()
         return PythonLanguage()
 
+    # 패키지 안의 소스로 고른 그 패키지의 언어. 한 언어의 소스만 있으면 그 언어, 둘 다 있으면 프로젝트 루트 표시 파일로
+    # 읽을 소스가 하나도 없으면 None
+    @classmethod
+    def sources_language(cls, layout: ProjectLayout) -> Language | None:
+        found = [lang for lang in (PythonLanguage(), RustLanguage())
+                 if next(layout.package_root.rglob(f"*{lang.suffix}"), None) is not None]
+        if not found:
+            return None
+        return found[0] if len(found) == 1 else cls.language_for(layout.project_root)
+
+    # 패키지의 언어. 소스가 아직 없는 새 패키지는 프로젝트 루트 표시 파일로
+    @classmethod
+    def language_of(cls, layout: ProjectLayout) -> Language:
+        return cls.sources_language(layout) or cls.language_for(layout.project_root)
+
     def run(self) -> int:
         p = argparse.ArgumentParser(prog="lnt", description="ln-structure 도구")
         p.add_argument("--root", default=".", help="프로젝트 안의 아무 경로. 기본: 현재 디렉토리")
@@ -83,14 +98,23 @@ class Cli:
             for stream in (sys.stdin, sys.stdout, sys.stderr):
                 if hasattr(stream, "reconfigure"):
                     stream.reconfigure(encoding="utf-8")
-            runner = HookRunner(sys.stdin.read(), Path.cwd(), self.language_for)
+            runner = HookRunner(sys.stdin.read(), Path.cwd(), self.language_of)
             return runner.post_edit() if args.event == "post-edit" else runner.session_start()
 
         layout = ProjectLayout.find(Path(args.root))
         if layout is None:
             sys.stderr.write("src/<pkg>/lN 이나 src/lN 구조를 찾지 못함\n")
             return 1
-        lang = self.language_for(layout.project_root)
+
+        if args.cmd == "map" and args.json:
+            # 받는 쪽은 UTF-8 로 읽는다. 콘솔 로케일과 무관하게 고정
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8")
+            print(json.dumps(MapExporter.document([self.map_package(lo) for lo in ProjectLayout.find_all(Path(args.root))]),
+                             ensure_ascii=False, indent=1))
+            return 0
+
+        lang = self.language_of(layout)
         modules, edges = Scanner(layout, lang).scan()
         graph = Graph(modules, edges)
 
@@ -130,13 +154,6 @@ class Cli:
             print(lister.report(args.targets))
             return 1 if lister.missing else 0
 
-        if args.cmd == "map" and args.json:
-            # 받는 쪽은 UTF-8 로 읽는다. 콘솔 로케일과 무관하게 고정
-            if hasattr(sys.stdout, "reconfigure"):
-                sys.stdout.reconfigure(encoding="utf-8")
-            print(json.dumps(MapExporter(layout, graph, lang).data(), ensure_ascii=False, indent=1))
-            return 0
-
         if args.cmd == "map":
             for name in sorted(modules, key=lambda n: (modules[n].scope, modules[n].layer, n)):
                 mod = modules[name]
@@ -169,6 +186,15 @@ class Cli:
                 print(f"주의: {n}")
             return 0
         return 1
+
+    # map --json 의 패키지 하나. 읽을 소스가 없는 패키지(다른 언어)는 빈 지도
+    @classmethod
+    def map_package(cls, layout: ProjectLayout) -> dict:
+        lang = cls.sources_language(layout)
+        if lang is None:
+            return MapExporter.unreadable(layout)
+        modules, edges = Scanner(layout, lang).scan()
+        return MapExporter(layout, Graph(modules, edges), lang).package()
 
     # 명령줄 진입. pyproject 의 lnt 와 python -m lntools 가 부른다
     @staticmethod
