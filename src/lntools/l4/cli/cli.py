@@ -101,8 +101,8 @@ class Cli:
             runner = HookRunner(sys.stdin.read(), Path.cwd(), self.language_of)
             return runner.post_edit() if args.event == "post-edit" else runner.session_start()
 
-        layout = ProjectLayout.find(Path(args.root))
-        if layout is None:
+        found = ProjectLayout.find_all(Path(args.root))
+        if not found:
             sys.stderr.write("src/<pkg>/lN 이나 src/lN 구조를 찾지 못함\n")
             return 1
 
@@ -110,34 +110,58 @@ class Cli:
             # 받는 쪽은 UTF-8 로 읽는다. 콘솔 로케일과 무관하게 고정
             if hasattr(sys.stdout, "reconfigure"):
                 sys.stdout.reconfigure(encoding="utf-8")
-            print(json.dumps(MapExporter.document([self.map_package(lo) for lo in ProjectLayout.find_all(Path(args.root))]),
-                             ensure_ascii=False, indent=1))
+            print(json.dumps(MapExporter.document([self.map_package(lo) for lo in found]), ensure_ascii=False, indent=1))
             return 0
 
-        lang = self.language_of(layout)
-        modules, edges = Scanner(layout, lang).scan()
-        graph = Graph(modules, edges)
+        packs = [self.load(lo) for lo in self.readable(found)]
+        # 패키지가 여럿이면 패키지마다 이름을 머리로 단다
+        multi = len(packs) > 1
+
+        def head(layout: ProjectLayout) -> None:
+            if multi:
+                print(f"[{layout.package_name}]")
 
         if args.cmd == "check":
-            only = None
             if args.file:
-                chain = graph.modules_of(Path(args.file))
-                only = {x.name for x in chain}
-            violations = Checker(graph, Surface(layout, modules, lang)).run(only)
-            for v in violations:
-                print(v.format(layout.project_root))
-            for h in lang.hints({v.code for v in violations}):
-                print(h)
-            print(f"위반 {len(violations)}건, 모듈 {len(modules)}개")
-            return 1 if violations else 0
+                own = ProjectLayout.find(Path(args.file))
+                if own is None:
+                    sys.stderr.write(f"ln 패키지 밖의 파일: {args.file}\n")
+                    return 1
+                packs = [p for p in packs if p[0].package_root == own.package_root] or [self.load(own)]
+            total, count, codes = 0, 0, {}
+            for layout, lang, graph in packs:
+                only = {x.name for x in graph.modules_of(Path(args.file))} if args.file else None
+                violations = Checker(graph, Surface(layout, graph.modules, lang)).run(only)
+                for v in violations:
+                    print(v.format(layout.project_root))
+                codes.setdefault(lang.name, (lang, set()))[1].update(v.code for v in violations)
+                total += len(violations)
+                count += len(graph.modules)
+                if len(packs) > 1:
+                    print(f"{layout.package_name}: 위반 {len(violations)}건, 모듈 {len(graph.modules)}개")
+            for lang, found in codes.values():
+                for h in lang.hints(found):
+                    print(h)
+            print(f"위반 {total}건, 모듈 {count}개" + (f" (패키지 {len(packs)}개)" if len(packs) > 1 else ""))
+            return 1 if total else 0
 
         if args.cmd == "blast":
-            print(Blaster(graph).report(args.module, args.depth))
+            picked = self.pick(packs, args.module)
+            if isinstance(picked, str):
+                sys.stderr.write(f"{picked}\n")
+                return 1
+            (_, _, graph), name = picked
+            print(Blaster(graph).report(name, args.depth))
             return 0
 
         if args.cmd == "move":
+            picked = self.pick(packs, args.module)
+            if isinstance(picked, str):
+                sys.stderr.write(f"{picked}\n")
+                return 1
+            (layout, lang, graph), name = picked
             try:
-                for line in Mover(layout, graph, lang).move(args.module, args.layer):
+                for line in Mover(layout, graph, lang).move(name, args.layer):
                     print(line)
             except ValueError as e:
                 sys.stderr.write(f"{e}\n")
@@ -145,47 +169,100 @@ class Cli:
             return 0
 
         if args.cmd == "review":
-            for line in Reviewer(layout, graph, lang).lines():
-                print(line)
+            for layout, lang, graph in packs:
+                head(layout)
+                for line in Reviewer(layout, graph, lang).lines():
+                    print(line)
             return 0
 
         if args.cmd == "sig":
-            lister = SignatureLister(layout, graph, lang)
-            print(lister.report(args.targets))
-            return 1 if lister.missing else 0
+            # '패키지/대상' 은 그 패키지에서, 맨 대상은 그 대상이 있는 패키지 모두에서 찾는다
+            listers = [(layout, SignatureLister(layout, graph, lang)) for layout, lang, graph in packs]
+            blocks: dict[str, list[str]] = {}
+            missing: list[str] = []
+            for target in args.targets or [""]:
+                pkg, _, name = target.rpartition("/")
+                owners = [(lo, sl) for lo, sl in listers if (not pkg or lo.package_name == pkg) and sl.select(name)]
+                if not owners:
+                    missing.append(target)
+                for lo, sl in owners:
+                    blocks.setdefault(lo.package_name, []).extend([*sl.lines([name]), ""])
+            for layout, _ in listers:
+                if layout.package_name in blocks:
+                    head(layout)
+                    print("\n".join(blocks[layout.package_name]).rstrip("\n"))
+            for target in missing:
+                print(f"대상 없음: {target}")
+            return 1 if missing else 0
 
         if args.cmd == "map":
-            for name in sorted(modules, key=lambda n: (modules[n].scope, modules[n].layer, n)):
-                mod = modules[name]
-                deps = sorted({e.dst or f"l{e.dst_layer}.*" for e in graph.dependencies(name)})
-                ext = " +ext" if mod.has_external else ""
-                print(f"l{mod.layer}  {name}{ext}  <- {', '.join(deps) if deps else '-'}")
+            for layout, _, graph in packs:
+                head(layout)
+                modules = graph.modules
+                for name in sorted(modules, key=lambda n: (modules[n].scope, modules[n].layer, n)):
+                    mod = modules[name]
+                    deps = sorted({e.dst or f"l{e.dst_layer}.*" for e in graph.dependencies(name)})
+                    ext = " +ext" if mod.has_external else ""
+                    print(f"l{mod.layer}  {name}{ext}  <- {', '.join(deps) if deps else '-'}")
             return 0
 
         if args.cmd == "doc":
-            docs = DocGenerator(layout, graph, lang)
-            if args.stamp == "all":
-                for w in docs.stamp_all():
-                    print(layout.relative(w))
-                return 0
-            if args.stamp:
-                if args.stamp not in modules:
+            if args.stamp and args.stamp != "all":
+                picked = self.pick(packs, args.stamp)
+                if isinstance(picked, str):
+                    sys.stderr.write(f"{picked}\n")
+                    return 1
+                (layout, lang, graph), name = picked
+                if name not in graph.modules:
                     sys.stderr.write(f"모듈 없음: {args.stamp}\n")
                     return 1
-                print(layout.relative(docs.stamp(args.stamp)))
+                print(layout.relative(DocGenerator(layout, graph, lang).stamp(name)))
                 return 0
+            bad = 0
+            for layout, lang, graph in packs:
+                docs = DocGenerator(layout, graph, lang)
+                if args.stamp == "all":
+                    for w in docs.stamp_all():
+                        print(layout.relative(w))
+                elif args.check:
+                    found = docs.check()
+                    for x in found:
+                        print(f"불일치: {x}")
+                    bad += len(found)
+                else:
+                    for w in docs.write_all():
+                        print(layout.relative(w))
+                    for n in docs.notices:
+                        print(f"주의: {n}")
             if args.check:
-                bad = docs.check()
-                for x in bad:
-                    print(f"불일치: {x}")
-                print(f"불일치 {len(bad)}건")
+                print(f"불일치 {bad}건")
                 return 1 if bad else 0
-            for w in docs.write_all():
-                print(layout.relative(w))
-            for n in docs.notices:
-                print(f"주의: {n}")
             return 0
         return 1
+
+    # 명령이 다룰 패키지: 찾은 ln 패키지 중 읽을 소스가 있는 것. 하나도 없으면(새 프로젝트) 전부
+    @classmethod
+    def readable(cls, found: list[ProjectLayout]) -> list[ProjectLayout]:
+        return [lo for lo in found if cls.sources_language(lo)] or found
+
+    @classmethod
+    def load(cls, layout: ProjectLayout) -> tuple[ProjectLayout, Language, Graph]:
+        lang = cls.language_of(layout)
+        modules, edges = Scanner(layout, lang).scan()
+        return layout, lang, Graph(modules, edges)
+
+    # 모듈 하나를 받는 명령의 대상. '패키지/모듈' 이면 그 패키지, 아니면 그 이름의 모듈이 있는 패키지
+    # 어디에도 없으면 첫 패키지(명령이 '모듈 없음' 을 알린다). 여러 패키지에 있으면 알릴 글
+    @staticmethod
+    def pick(packs: list[tuple[ProjectLayout, Language, Graph]], target: str):
+        if "/" in target:
+            pkg, name = target.split("/", 1)
+            hit = [p for p in packs if p[0].package_name == pkg]
+            return (hit[0], name) if hit else f"패키지 없음: {pkg}"
+        hit = [p for p in packs if target in p[2].modules]
+        if len(hit) > 1:
+            return f"여러 패키지에 있음: {', '.join(f'{p[0].package_name}/{target}' for p in hit)}. 패키지/모듈 로 준다"
+        return (hit[0] if hit else packs[0]), target
 
     # map --json 의 패키지 하나. 읽을 소스가 없는 패키지(다른 언어)는 빈 지도
     @classmethod

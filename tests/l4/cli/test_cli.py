@@ -1,3 +1,4 @@
+import io
 import json
 import shutil
 from pathlib import Path
@@ -78,6 +79,55 @@ def test_language_of_package(tmp_path: Path):
     los = {lo.package_name: lo for lo in ProjectLayout.find_all(_mixed(tmp_path))}
     assert (Cli.language_of(los["shop"]).name, Cli.language_of(los["kit"]).name) == ("python", "rust")
     assert Cli.sources_language(los["web"]) is None and Cli.language_of(los["web"]).name == "python"
+
+
+# 프로젝트 루트의 check 는 읽을 소스가 있는 패키지를 모두 검사한다. --file 은 그 파일의 패키지만
+def test_check_covers_every_package(tmp_path: Path, capsys):
+    root = _mixed(tmp_path)
+    assert Cli(["--root", str(root), "check"]).run() == 1
+    out = capsys.readouterr().out
+    assert "shop: 위반 13건" in out and "kit: 위반 0건" in out and "web:" not in out
+    assert out.splitlines()[-1].startswith("위반 13건") and out.splitlines()[-1].endswith("(패키지 2개)")
+    kit_file = next((root / "src" / "kit" / "l0" / "candle").glob("*.rs"))
+    assert Cli(["--root", str(root), "check", "--file", str(kit_file)]).run() == 0
+    assert capsys.readouterr().out.splitlines()[-1].startswith("위반 0건")
+
+
+# doc 은 패키지마다 문서를 만들고, 소스가 없는 패키지에는 만들지 않는다
+def test_doc_covers_every_package(tmp_path: Path, capsys):
+    root = _mixed(tmp_path)
+    assert Cli(["--root", str(root), "doc"]).run() == 0
+    assert (root / "src" / "shop" / "for-agent-layerinfo.md").is_file()
+    assert not (root / "src" / "web" / "for-agent-layerinfo.md").exists()
+    capsys.readouterr()
+    assert Cli(["--root", str(root), "doc", "--check"]).run() == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "불일치 0건"
+
+
+# 모듈을 받는 명령은 '패키지/모듈' 로 패키지를 고른다. 이름이 여러 패키지에 있으면 알리고 멈춘다
+def test_module_target_picks_package(tmp_path: Path, capsys):
+    root = _mixed(tmp_path)
+    assert Cli(["--root", str(root), "blast", "l0.candle"]).run() == 1
+    assert "여러 패키지에 있음: kit/l0.candle, shop/l0.candle" in capsys.readouterr().err
+    assert Cli(["--root", str(root), "blast", "shop/l0.candle"]).run() == 0
+    assert "l0.candle" in capsys.readouterr().out
+    assert Cli(["--root", str(root), "sig", "kit/l0.candle", "l1.order"]).run() == 0
+    out = capsys.readouterr().out
+    assert out.index("[kit]") < out.index("## l0.candle") < out.index("[shop]") < out.index("## l1.order")
+    assert Cli(["--root", str(root), "sig", "nothing/l1.order"]).run() == 1
+    assert "대상 없음: nothing/l1.order" in capsys.readouterr().out
+
+
+# 세션 시작 훅은 패키지마다 layerinfo 를 싣는다
+def test_session_start_injects_every_layerinfo(tmp_path: Path, capsys, monkeypatch):
+    root = _mixed(tmp_path)
+    assert Cli(["--root", str(root), "doc"]).run() == 0
+    capsys.readouterr()
+    monkeypatch.chdir(root)
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    assert Cli(["hook", "session-start"]).run() == 0
+    out = capsys.readouterr().out
+    assert "[lnt] src/kit/for-agent-layerinfo.md" in out and "[lnt] src/shop/for-agent-layerinfo.md" in out
 
 
 # 프로젝트 루트에 Cargo.toml 이 있으면 Rust, 아니면 Python

@@ -24,16 +24,14 @@ class HookRunner:
         except json.JSONDecodeError:
             self.payload = {}
 
-    # SessionStart: layerinfo 를 stdout 으로. stdout 은 컨텍스트에 주입된다
+    # SessionStart: layerinfo 를 stdout 으로. stdout 은 컨텍스트에 주입된다. ln 패키지가 여럿이면 패키지마다
     def session_start(self) -> int:
-        layout = ProjectLayout.find(self.cwd)
-        if layout is None:
-            return 0
-        p = layout.package_root / "for-agent-layerinfo.md"
-        if p.is_file():
-            sys.stdout.write(f"[lnt] {layout.relative(p)}\n")
-            sys.stdout.write(p.read_text(encoding="utf-8"))
-            sys.stdout.write("\n")
+        for layout in ProjectLayout.find_all(self.cwd):
+            p = layout.package_root / "for-agent-layerinfo.md"
+            if p.is_file():
+                sys.stdout.write(f"[lnt] {layout.relative(p)}\n")
+                sys.stdout.write(p.read_text(encoding="utf-8"))
+                sys.stdout.write("\n")
         return 0
 
     # PostToolUse(Edit|Write): 위반은 exit 2 + stderr, 정보는 additionalContext

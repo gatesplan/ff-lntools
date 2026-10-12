@@ -72,6 +72,10 @@ is checked and violations come back as errors.
 | `lnt doc --check` | Exit 1 if docs drifted from code |
 | `lnt move MODULE lK` | Relocate a module and rewrite imports, tests mirror, layer `__init__`, docs |
 
+When `src/` holds several ln packages, `check`, `doc`, `review`, `map` and the SessionStart hook cover every package
+that has sources (`--root` inside one package narrows it to that package). Commands that take a module
+(`blast`, `sig`, `move`, `doc --stamp`) accept `package/module`; a bare name that exists in several packages is refused.
+
 ## 3. Getting started
 
 ### Install

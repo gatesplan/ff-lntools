@@ -72,6 +72,10 @@ tests/
 | `lnt doc --check` | 문서가 코드와 어긋났는지 검사 |
 | `lnt move MODULE lK` | 모듈을 다른 층으로 옮기고 import 경로, 테스트, 문서를 전부 갱신 |
 
+`src/` 아래 ln 패키지가 여럿이면 `check`, `doc`, `review`, `map` 과 SessionStart 훅은 소스가 있는 패키지를 모두 다룬다
+(`--root` 가 한 패키지 안이면 그 패키지만). 모듈을 받는 명령(`blast`, `sig`, `move`, `doc --stamp`)은 `패키지/모듈` 로 받고,
+패키지 없이 쓴 이름이 여러 패키지에 있으면 멈추고 알린다.
+
 ## 3. 시작하기
 
 ### 설치

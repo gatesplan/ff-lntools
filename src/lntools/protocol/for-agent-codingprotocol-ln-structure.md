@@ -187,6 +187,8 @@ lnt doc [--check]           # layerinfo 와 표면 파일 생성 / 불일치 검
 lnt move MODULE lK          # 층 이동 + import 경로 재작성
 ```
 
+`src/` 아래 ln 패키지가 여럿이면 `check`, `review`, `doc` 은 패키지를 모두 다루고, 모듈을 받는 명령은 `패키지/모듈`(예: `fmp_engine/l0.money`)로 준다.
+
 Claude Code 훅(`.claude/settings.json`)이 편집마다 `check`, `blast`, layerinfo 와 표면 파일 검사를 실행해
 위반은 해결 방법과 함께 오류로, 영향 범위와 문서·표면 파일 불일치, 문법 오류로 읽지 못한 파일은 정보로 세션에 주입한다.
 
