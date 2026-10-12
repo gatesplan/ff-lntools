@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .....l0.language import Language, RawImpl, RawImport
+from .....l0.language import Language, RawImpl, RawImport, RawReexport
 from ...l0.import_reader import ImportReader
 from ...l0.import_rewriter import ImportRewriter
 from ...l0.signature_extractor import SignatureExtractor
@@ -48,6 +48,10 @@ class PythonLanguage(Language):
     def public_names(self, module_dir: Path) -> tuple[dict[str, str], list[Path]]:
         sig = SignatureExtractor()
         return sig.public_names(module_dir), sig.unreadable
+
+    # 다시 내보낼 이름은 타입 별칭(Name: TypeAlias = ...)으로 꺼낸다. import 한 이름은 표면이 아니다
+    def read_reexports(self, module_dir: Path, package_root: Path) -> list[RawReexport]:
+        return []
 
     def defined_names(self, module_dir: Path) -> set[str]:
         return self._sig.defined_names(module_dir)

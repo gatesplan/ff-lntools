@@ -3,6 +3,7 @@ from pathlib import Path
 
 from .raw_impl import RawImpl
 from .raw_import import RawImport
+from .raw_reexport import RawReexport
 
 
 # 언어마다 다르게 해야 하는 일. 모듈, 층, 그래프는 언어와 무관하고 소스를 읽고 쓰는 일만 여기를 거친다
@@ -31,6 +32,11 @@ class Language(ABC):
     # 모듈 폴더 바로 아래 파일의 공개 이름 -> 정의된 파일 이름(확장자 제외). 그리고 문법 오류로 읽지 못한 파일
     @abstractmethod
     def public_names(self, module_dir: Path) -> tuple[dict[str, str], list[Path]]: ...
+
+    # 모듈 폴더 바로 아래 파일이 다시 내보내는 이름 (Rust 의 pub use). 다시 내보내기를 표면으로 세지 않는 언어는 빈 목록
+    # 표면에 넣을지는 언어와 무관하게 정한다: 중첩 모듈과 패키지 루트의 맨 위 층 모듈이 같은 스코프 안의 이름을 내보낼 때만
+    @abstractmethod
+    def read_reexports(self, module_dir: Path, package_root: Path) -> list[RawReexport]: ...
 
     # 모듈 폴더 안(하위 폴더 포함, 표면 파일 제외) 최상위에 정의된 모든 이름
     @abstractmethod

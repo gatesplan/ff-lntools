@@ -9,6 +9,7 @@ _EXPORTS = {
     "ProjectLayout": "project_layout",
     "RawImpl": "language",
     "RawImport": "language",
+    "RawReexport": "language",
     "Violation": "violation",
 }
 __all__ = list(_EXPORTS)

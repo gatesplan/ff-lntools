@@ -2,5 +2,6 @@
 from .language import Language
 from .raw_impl import RawImpl
 from .raw_import import RawImport
+from .raw_reexport import RawReexport
 
-__all__ = ["Language", "RawImpl", "RawImport"]
+__all__ = ["Language", "RawImpl", "RawImport", "RawReexport"]

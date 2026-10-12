@@ -6,7 +6,7 @@ from ...l1.surface import Surface
 
 
 # C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로, C6 덧붙이기 위치 검사. 파싱에 실패한 파일은 E 로 먼저 알린다
-# C2 는 셋: 표면을 지나 들어간 import, 표면에 없는 이름을 import, 같은 층에서 겹치는 공개 이름
+# C2 는 넷: 표면을 지나 들어간 import, 표면에 없는 이름을 import, 같은 층에서 겹치는 공개 이름, 스코프 밖 이름을 다시 내보내기
 # C6: 덧붙이기(Rust 의 impl)는 타입의 모듈에, 트레이트 구현은 타입이나 트레이트의 모듈에 둔다.
 # 다른 곳에 두면 import 없이 그 코드를 부르게 되어 방향과 영향 범위가 보이지 않는다
 class Checker:
@@ -62,6 +62,11 @@ class Checker:
                 if missing:
                     add(("C2", e.src, e.target, tuple(missing)), Violation("C2", e.src, e.file, e.line,
                         f"{e.dst} 표면에 없는 이름: {', '.join(missing)}. 모듈은 클래스와 타입 별칭만 공개한다"))
+        for name, m in sorted(g.modules.items()):
+            where = f"중첩 모듈 {m.scope}" if m.scope else "패키지"
+            for r in self.surface.reexports(name)[1]:
+                add(("C2", r.file, r.line, r.name), Violation("C2", name, r.file, r.line,
+                    f"{where} 밖의 이름을 다시 내보낸다: {r.path}. 표면에서 빠진다. {where} 안쪽 모듈의 표면 이름만 다시 내보낸다"))
         for layer in self.surface.layer_names():
             for name, owners in sorted(self.surface.of_layer(layer)[1].items()):
                 for o in owners:

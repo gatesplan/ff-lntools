@@ -320,6 +320,73 @@ def test_public_names_and_signatures(tmp_path: Path):
     assert LANG.class_counts(d) == [("order_placer.rs", 1), ("side.rs", 1)]
 
 
+# ---- 다시 내보내기 (pub use) ----
+
+# 중첩 모듈 formula 의 맨 위 층 kit 이 아래 층 트레이트와 타입을 pub use 로 꺼내고, 바깥 model 이 그 트레이트를 구현한다
+KIT_FILES = {
+    "l0/formula/l0/env/env.rs": "pub trait Env {\n    fn value(&self, name: &str) -> f64;\n}\n",
+    "l0/formula/l1/eval/eval.rs": (
+        "use crate::l0::formula::l0::Env;\n\npub struct Eval;\n\nimpl Eval {\n"
+        "    pub fn double(env: &dyn Env, name: &str) -> f64 {\n        env.value(name) * 2.0\n    }\n}\n"),
+    "l0/formula/l2/kit/kit.rs": "pub use crate::l0::formula::l0::Env;\npub use super::super::super::l1::{Eval as Doubler};\n",
+    "l1/model/model.rs": (
+        "use crate::l0::formula::{Doubler, Env};\n\npub struct Model;\n\nimpl Env for Model {\n"
+        "    fn value(&self, _name: &str) -> f64 {\n        1.5\n    }\n}\n\n"
+        "impl Model {\n    pub fn answer(&self) -> f64 {\n        Doubler::double(self, \"x\")\n    }\n}\n"),
+}
+
+
+def _kit(tmp_path: Path, extra: dict[str, str] | None = None) -> tuple[ProjectLayout, Graph]:
+    root = _crate(tmp_path, {**KIT_FILES, **(extra or {})})
+    layout, graph = _graph(root)
+    DocGenerator(layout, graph, LANG).write_all()
+    return _graph(root)
+
+
+def test_reexports_on_top_layer_are_surface(tmp_path: Path):
+    layout, graph = _kit(tmp_path)
+    src = layout.package_root
+    surface = Surface(layout, graph.modules, LANG)
+    assert surface.of_module("l0.formula.l2.kit") == {"Env": "kit", "Doubler": "kit"}
+    assert surface.of_module("l0.formula") == {"Env": "l2.kit", "Doubler": "l2.kit"}
+    assert "pub use kit::{Doubler, Env};" in (src / "l0/formula/l2/kit/mod.rs").read_text(encoding="utf-8")
+    assert "pub use l2::kit::{Doubler, Env};" in (src / "l0/formula/mod.rs").read_text(encoding="utf-8")
+    assert Checker(graph, surface).run() == []
+    # 바깥 model 의 impl Env for Model 은 타입의 모듈에 있으니 C6 이 아니다
+    assert graph.modules["l1.model"].attachments[0][5] == "l0.formula"
+
+
+def test_reexport_signatures_follow_the_definition(tmp_path: Path):
+    _, graph = _kit(tmp_path)
+    kit = LANG.signatures(graph.modules["l0.formula.l2.kit"].path, ["Doubler", "Env"])
+    assert kit == ["Doubler  # kit.rs: pub use",
+                   "Doubler::double(env: &dyn Env, name: &str) -> f64  # l0/formula/l1/eval/eval.rs",
+                   "Env  # kit.rs: pub use",
+                   "Env::value(&self, name: &str) -> f64  # l0/formula/l0/env/env.rs"]
+    assert LANG.signatures(graph.modules["l0.formula"].path, ["Doubler"])[0] == "Doubler  # l2/kit/kit.rs: pub use"
+
+
+# 맨 위 층이 아닌 모듈의 pub use 는 표면이 아니다. 맨 위 층이 스코프 밖(바깥 패키지, 외부 크레이트, 표준)을 내보내면 C2 이고 표면에서 빠진다
+def test_reexports_out_of_scope(tmp_path: Path):
+    kit = KIT_FILES["l0/formula/l2/kit/kit.rs"] + "pub use std::fmt::Display;\npub use serde::Serialize as Ser;\n"
+    eval_rs = "pub use crate::l0::formula::l0::Env as Ctx;\n" + KIT_FILES["l0/formula/l1/eval/eval.rs"]
+    model = "pub use crate::l0::formula::Env as ModelEnv;\npub use crate::l0::formula::l0::env::Env as Deep;\n" \
+        + KIT_FILES["l1/model/model.rs"]
+    layout, graph = _kit(tmp_path, {"l0/formula/l2/kit/kit.rs": kit, "l0/formula/l1/eval/eval.rs": eval_rs,
+                                    "l1/model/model.rs": model})
+    surface = Surface(layout, graph.modules, LANG)
+    assert set(surface.of_module("l0.formula.l1.eval")) == {"Eval"}
+    assert set(surface.of_module("l0.formula")) == {"Env", "Doubler"}
+    # 패키지 루트의 맨 위 층은 패키지 안 이름을 내보낼 수 있다
+    assert set(surface.of_root()) == {"Model", "ModelEnv", "Deep"}
+    # 외부 크레이트를 쓰면 l0 에 둘 수 없어 C3 도 나오지만 여기서는 C2 만 본다
+    c2 = [v for v in Checker(graph, surface).run() if v.code == "C2"]
+    assert {(v.module, v.line) for v in c2} == {("l0.formula.l2.kit", 3), ("l0.formula.l2.kit", 4), ("l1.model", 2)}
+    msgs = [v.message for v in c2 if v.module == "l0.formula.l2.kit"]
+    assert any("중첩 모듈 l0.formula 밖의 이름을 다시 내보낸다: std::fmt::Display" in m for m in msgs)
+    assert any("serde::Serialize" in m for m in msgs)
+
+
 # ---- 문서와 점검 ----
 
 # 표면 파일에 손으로 쓴 코드가 있으면 덮어쓰지 않고 알린다
@@ -454,4 +521,22 @@ def test_rich_fixture_builds_with_cargo(tmp_path: Path):
         clippy = _cargo(root, "clippy", "--offline", "--all-targets", "-q", *features, "--", "-D", "warnings")
         assert clippy.returncode == 0, clippy.stderr
     test = _cargo(root, "test", "--offline", "-q")
+    assert test.returncode == 0, test.stderr
+
+
+# 중첩 모듈 맨 위 층이 pub use 로 꺼낸 트레이트를 바깥 모듈이 구현하는 크레이트가 생성한 표면으로 경고 없이 컴파일된다
+@pytest.mark.skipif(CARGO is None, reason="cargo 없음")
+def test_reexported_trait_builds_with_cargo(tmp_path: Path):
+    root = _crate(tmp_path, KIT_FILES)
+    (root / "Cargo.toml").write_text('[package]\nname = "calc"\nversion = "0.1.0"\nedition = "2021"\n', encoding="utf-8")
+    for name, lines in LANG.setup_files().items():
+        (root / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (root / "tests").mkdir()
+    (root / "tests/model.rs").write_text(
+        "use calc::Model;\n\n#[test]\nfn doubles() {\n    assert_eq!(Model.answer(), 3.0);\n}\n", encoding="utf-8")
+    layout, graph = _graph(root)
+    DocGenerator(layout, graph, LANG).write_all()
+    clippy = _cargo(root, "clippy", "--all-targets", "-q", "--", "-D", "warnings")
+    assert clippy.returncode == 0, clippy.stderr
+    test = _cargo(root, "test", "-q")
     assert test.returncode == 0, test.stderr

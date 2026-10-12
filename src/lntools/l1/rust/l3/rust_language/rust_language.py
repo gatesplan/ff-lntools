@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .....l0.language import Language, RawImpl, RawImport
+from .....l0.language import Language, RawImpl, RawImport, RawReexport
 from ...l0.surface_renderer import SurfaceRenderer
 from ...l2.signature_extractor import SignatureExtractor
 from ...l2.use_reader import UseReader
@@ -16,6 +16,7 @@ HINTS = {
           "받는 쪽은 Box<dyn Trait> 로 받고, 연결은 진입점에서만. 자세히: 프로토콜 문서의 '상위 층 호출이 필요할 때'",
     "C2": "C2 풀이: 모듈이나 층의 표면에 있는 이름만 쓴다 (use crate::lK::module::Name 또는 use crate::lK::Name). "
           "표면은 lnt doc 이 만든다: 모듈 파일의 pub struct, enum, trait, type, 중첩 모듈은 안쪽 맨 위 층. "
+          "맨 위 층 모듈의 pub use 는 같은 중첩 모듈(패키지 루트면 패키지) 안쪽 이름만 표면이 된다. "
           "새로 만든 이름이면 lnt doc 을 돌리고, 자유 함수나 상수면 타입의 연관 함수나 연관 상수로 옮기고, 같은 층에서 이름이 겹치면 한쪽 이름을 바꾼다",
     "C3": "C3 풀이: 메시지의 lnt move 를 실행하고 lnt check 로 연쇄 이동을 확인한다",
     "C4": "C4 풀이: 순환의 원인이 함께 쓰는 부분이면 그 부분을 새 모듈로 떼어 낸다. 순환하는 모듈이 1:1 로 늘 함께 바뀌면 한 모듈로 합친다. "
@@ -55,6 +56,9 @@ class RustLanguage(Language):
     def public_names(self, module_dir: Path) -> tuple[dict[str, str], list[Path]]:
         sig = SignatureExtractor()
         return sig.public_names(module_dir), sig.unreadable
+
+    def read_reexports(self, module_dir: Path, package_root: Path) -> list[RawReexport]:
+        return self._sig.reexports(module_dir, package_root)
 
     def defined_names(self, module_dir: Path) -> set[str]:
         return self._sig.defined_names(module_dir)
