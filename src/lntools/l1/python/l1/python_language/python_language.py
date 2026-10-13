@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .....l0.language import Language, RawImpl, RawImport, RawReexport
+from .....l0.language import Language, RawImpl, RawImport, RawReexport, RawTypeRef
 from ...l0.import_reader import ImportReader
 from ...l0.import_rewriter import ImportRewriter
 from ...l0.signature_extractor import SignatureExtractor
@@ -62,8 +62,12 @@ class PythonLanguage(Language):
     def signatures(self, module_dir: Path, names: list[str]) -> list[str]:
         return self._sig.extract(module_dir, names)
 
-    def expand_aliases(self, module_dir: Path, words: set[str]) -> set[str]:
-        return self._sig.expand_aliases(module_dir, words)
+    def signature_types(self, module_dir: Path, package_root: Path, names: list[str]) -> list[RawTypeRef]:
+        reader = ImportReader(package_root)
+        out: list[RawTypeRef] = []
+        for owner, segs, f, same in self._sig.type_refs(module_dir, names):
+            out.extend(RawTypeRef(owner, name, target, same) for target, name in reader.resolve(f, segs))
+        return out
 
     def class_counts(self, module_dir: Path) -> list[tuple[str, int]]:
         return self._sig.class_counts(module_dir)

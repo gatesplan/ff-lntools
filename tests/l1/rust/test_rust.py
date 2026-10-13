@@ -412,9 +412,57 @@ def test_review_on_rust(tmp_path: Path):
     (root / "src/l1/spare/spare.rs").write_text("pub struct Spare;\npub enum Kind { A }\n", encoding="utf-8")
     layout, graph = _graph(root)
     rv = Reviewer(layout, graph, LANG)
-    assert ("l1.book", "Position", "l1.book.l0.position") in rv.leaks()
+    assert ("l1.book", "Position", "l1.book.l0.position", ["Ledger"]) in rv.leaks()
     assert "l1.spare" in rv.orphans() and "l3.app" not in rv.orphans()
     assert ("l1.spare", "spare.rs", 2) in rv.crowded_files()
+
+
+# rust_clean 의 중첩 모듈 l1.book 은 l0.position 의 Position 을 감춘다. 맨 위 층 ledger 모듈에 파일을 더하고 표면을 다시 만든다
+def _book_leaks(tmp_path: Path, files: dict[str, str]) -> list:
+    from lntools.l2.reviewer import Reviewer
+    root = _copy(tmp_path, "rust_clean")
+    for rel, text in files.items():
+        f = root / "src/l1/book" / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text, encoding="utf-8")
+    DocGenerator(*_graph(root), LANG).write_all()
+    layout, graph = _graph(root)
+    return Reviewer(layout, graph, LANG).leaks()
+
+
+USE_POSITION = "use crate::l1::book::l0::position::Position;\n\n"
+HELD = USE_POSITION + "pub enum Kind {\n    Held(Position),\n    Flat,\n}\n"
+
+
+# 숨은 타입 노출은 이름 글자가 아니라 시그니처의 타입이 정의된 곳으로 판정한다
+@pytest.mark.parametrize("files, expected", [
+    # 변형 이름은 타입이 아니다. 감춘 Position 과 이름이 같아도 노출이 아니다 (#10)
+    ({"l1/ledger/kind.rs": "pub enum Kind {\n    Position,\n    Flat,\n}\n"}, []),
+    # 변형이 품은 타입은 노출이다
+    ({"l1/ledger/kind.rs": HELD}, [("l1.book", "Position", "l1.book.l0.position", ["Kind"])]),
+    # 같은 이름의 패키지 밖 타입은 감춘 타입이 아니다
+    ({"l0/position/error.rs": "pub struct Error;\n",
+      "l1/ledger/check.rs": "use std::fmt::Error;\n\npub struct Check;\n\nimpl Check {\n"
+                            "    pub fn run(&self) -> Result<(), Error> {\n        Ok(())\n    }\n}\n"}, []),
+    # 제네릭 인자는 감춘 타입이 아니다
+    ({"l1/ledger/hold.rs": "pub struct Hold<Position> {\n    pub item: Position,\n}\n"}, []),
+    # 표면에 같은 이름의 다른 타입이 있어도, 시그니처가 쓰는 감춘 타입은 노출이다
+    ({"l1/view/view.rs": "pub struct Position;\n", "l1/ledger/kind.rs": HELD},
+     [("l1.book", "Position", "l1.book.l0.position", ["Kind"])]),
+])
+def test_leaks_follow_definitions(tmp_path: Path, files: dict[str, str], expected: list):
+    assert _book_leaks(tmp_path, files) == expected
+
+
+# 맨 위 층 모듈에서 꺼내 주면(pub use, 경로 하나로 된 타입 별칭) 감춘 타입이 아니다
+@pytest.mark.parametrize("exposed", [
+    "pub use crate::l1::book::l0::position::Position;\n",
+    "pub type Position = crate::l1::book::l0::position::Position;\n",
+])
+def test_leak_cleared_by_exposing_from_top_layer(tmp_path: Path, exposed: str):
+    kind = HELD
+    assert _book_leaks(tmp_path, {"l1/ledger/kind.rs": kind}) != []
+    assert _book_leaks(tmp_path / "b", {"l1/ledger/kind.rs": kind, "l1/ledger/exposed.rs": exposed}) == []
 
 
 # 훅이 받는 Windows 경로(역슬래시)도 같은 파일로 본다

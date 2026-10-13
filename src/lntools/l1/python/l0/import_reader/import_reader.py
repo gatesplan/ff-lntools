@@ -17,6 +17,7 @@ class ImportReader:
     def __init__(self, package_root: Path):
         self.package_root = package_root
         self.pkg = package_root.name
+        self._scopes: dict[Path, tuple[dict[str, tuple[str | None, str | None]], list[str], set[str], str]] = {}
 
     # 문법 오류는 SyntaxError 로 올린다
     def read(self, file: Path) -> list[RawImport]:
@@ -92,6 +93,70 @@ class ImportReader:
         if module:
             base = base + module.split(".")
         return RawImport(".".join(base), names, kind, line)
+
+    # ---- 이름 풀기 ----
+
+    # file 안에서 쓴 이름 경로(Order, models.Order)가 가리키는 곳. (정의된 곳의 절대 점 경로, 원래 이름)
+    # from x import * 처럼 이름 하나를 정할 수 없으면 후보마다 하나씩. 패키지 밖이거나 풀리지 않으면 빈 목록
+    def resolve(self, file: Path, segments: list[str]) -> list[tuple[str, str]]:
+        bound, stars, local, here = self._scope(file)
+        head = segments[0]
+        if head in bound:
+            target, orig = bound[head]
+            if target is None:
+                return []
+            if orig is not None:
+                return [(target, orig)]
+            if len(segments) < 2:
+                return []
+            return [(".".join([target, *segments[1:-1]]), segments[-1])]
+        if head in local:
+            return [(here, head)]
+        return [(t, head) for t in stars] if len(segments) == 1 else []
+
+    # 파일의 이름 묶음. (들인 이름 -> (절대 점 경로, 원래 이름. 모듈을 들였으면 None), * 로 들인 곳들, 정의한 이름, 파일의 점 경로)
+    # 들인 곳이 패키지 밖이면 절대 점 경로가 None 이다
+    def _scope(self, file: Path) -> tuple[dict[str, tuple[str | None, str | None]], list[str], set[str], str]:
+        if file not in self._scopes:
+            bound: dict[str, tuple[str | None, str | None]] = {}
+            stars: list[str] = []
+            local: set[str] = set()
+            rel = file.relative_to(self.package_root)
+            here = ".".join([self.pkg, *rel.parts[:-1]] + ([] if rel.stem == "__init__" else [rel.stem]))
+            try:
+                tree = ast.parse(file.read_text(encoding="utf-8"), filename=str(file))
+            except (SyntaxError, UnicodeDecodeError):
+                tree = None
+            for node in ast.walk(tree) if tree is not None else []:
+                if isinstance(node, ast.Import):
+                    for a in node.names:
+                        raw = self._absolute(a.name, node.lineno, [], "runtime")
+                        if a.asname:
+                            bound[a.asname] = (raw.target, None)
+                        else:
+                            head = a.name.split(".")[0]
+                            bound[head] = (head if raw.target else None, None)
+                elif isinstance(node, ast.ImportFrom):
+                    names = [a.name for a in node.names]
+                    raw = (self._absolute(node.module or "", node.lineno, names, "runtime") if node.level == 0
+                           else self._relative(node.level, node.module, file, node.lineno, names, "runtime"))
+                    for a in node.names:
+                        if a.name == "*":
+                            if raw.target:
+                                stars.append(raw.target)
+                        else:
+                            bound[a.asname or a.name] = (raw.target, a.name)
+            for node in tree.body if tree is not None else []:
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    local.add(node.name)
+                elif isinstance(node, ast.Assign):
+                    local |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                    local.add(node.target.id)
+                elif isinstance(node, getattr(ast, "TypeAlias", ())):
+                    local.add(node.name.id)
+            self._scopes[file] = (bound, stars, local, here)
+        return self._scopes[file]
 
     # ---- 패키지 밖 쓰임 ----
 

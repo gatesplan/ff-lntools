@@ -4,6 +4,7 @@ from pathlib import Path
 from .raw_impl import RawImpl
 from .raw_import import RawImport
 from .raw_reexport import RawReexport
+from .raw_type_ref import RawTypeRef
 
 
 # 언어마다 다르게 해야 하는 일. 모듈, 층, 그래프는 언어와 무관하고 소스를 읽고 쓰는 일만 여기를 거친다
@@ -50,9 +51,12 @@ class Language(ABC):
     @abstractmethod
     def signatures(self, module_dir: Path, names: list[str]) -> list[str]: ...
 
-    # words 에 든 모듈 수준 타입 별칭을 풀어 그 안의 이름까지 더한 집합
+    # 공개 이름들의 시그니처가 쓰는 타입과 그 타입이 정의된 곳. 이름은 글자가 아니라 그 시그니처가 있는 파일의 import 로 푼다
+    # 다시 내보낸 정의와, 시그니처에 쓰인 모듈 수준 타입 별칭의 값까지 따라간다
+    # 공개 이름마다 그 이름 자신이 무엇인지도 넣는다 (is_owner: 자기 정의, 다시 내보낸 원래 정의, 경로 하나로 된 타입 별칭의 값)
+    # 패키지 밖(표준 라이브러리, 외부 패키지)이나 제네릭 인자처럼 패키지 안을 가리키지 않는 이름은 넣지 않는다
     @abstractmethod
-    def expand_aliases(self, module_dir: Path, words: set[str]) -> set[str]: ...
+    def signature_types(self, module_dir: Path, package_root: Path, names: list[str]) -> list[RawTypeRef]: ...
 
     # 모듈 폴더 바로 아래 파일마다 (파일 이름, 책임 단위로 센 클래스 수)
     @abstractmethod

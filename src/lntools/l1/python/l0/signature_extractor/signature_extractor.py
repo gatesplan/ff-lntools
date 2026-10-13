@@ -88,17 +88,85 @@ class SignatureExtractor:
                 lines.append(f"{name} = {ast.unparse(node.value)}  # {rel}")
         return lines
 
-    # words 에 든 모듈 수준 타입 별칭(EntityType = Union[Character, ...])을 풀어 그 안의 이름까지 더한다
-    def expand_aliases(self, module_dir: Path, words: set[str]) -> set[str]:
-        names = set(words)
+    # 공개 이름들의 시그니처가 타입으로 쓰는 이름. (공개 이름, 쓴 경로 조각, 그 시그니처가 있는 파일, 공개 이름 자신인지)
+    # 인자와 반환 annotation, 인자 기본값(호출하는 쪽이 알아야 할 이름), 클래스 수준 공개 필드 annotation. 문자열 annotation 도 읽는다
+    # 쓰인 이름이 모듈 폴더 안 모듈 수준 타입 별칭(EntityType = Union[Character, ...])이면 그 값까지 따라간다
+    # 공개 이름 자신: 자기 정의, 그리고 값이 이름 하나인 타입 별칭(Line: TypeAlias = _Line)의 그 이름
+    def type_refs(self, module_dir: Path, exported: list[str]) -> list[tuple[str, list[str], Path, bool]]:
+        defs = self._collect_defs(module_dir)
+        aliases = self._alias_values(module_dir)
+        out: list[tuple[str, list[str], Path, bool]] = []
+        for name in exported:
+            if name not in defs:
+                continue
+            node, rel = defs[name]
+            out.append((name, [name], module_dir / rel, True))
+            same = isinstance(getattr(node, "value", None), (ast.Name, ast.Attribute)) and not isinstance(node, ast.ClassDef)
+            todo = [(segs, module_dir / rel, same) for segs in self._def_paths(node)]
+            seen: set[str] = set()
+            while todo:
+                segs, f, same = todo.pop(0)
+                out.append((name, segs, f, same))
+                if len(segs) == 1 and segs[0] in aliases and segs[0] not in seen:
+                    seen.add(segs[0])
+                    value, af = aliases[segs[0]]
+                    todo.extend((s, af, False) for s in self._expr_paths(value))
+        return out
+
+    # 모듈 폴더 안 모듈 수준 타입 별칭. 이름 -> (값, 파일)
+    def _alias_values(self, module_dir: Path) -> dict[str, tuple[ast.AST, Path]]:
+        out: dict[str, tuple[ast.AST, Path]] = {}
         for f in sorted(module_dir.rglob("*.py")):
             tree = self._parse(f)
             for node in tree.body if tree else []:
                 target = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else getattr(node, "target", None)
+                if isinstance(node, getattr(ast, "TypeAlias", ())):
+                    target = node.name
                 value = getattr(node, "value", None)
-                if isinstance(target, ast.Name) and target.id in names and isinstance(value, (ast.Subscript, ast.BinOp, ast.Name)):
-                    names |= {n.id for n in ast.walk(value) if isinstance(n, ast.Name)}
-        return names
+                if isinstance(target, ast.Name) and isinstance(value, (ast.Subscript, ast.BinOp, ast.Name)):
+                    out.setdefault(target.id, (value, f))
+        return out
+
+    # 정의 하나의 시그니처가 쓰는 이름 경로. 클래스는 공개 메서드와 공개 필드, 함수는 인자와 반환, 별칭은 값
+    def _def_paths(self, node: ast.AST) -> list[list[str]]:
+        if isinstance(node, ast.ClassDef):
+            out: list[list[str]] = []
+            for n in node.body:
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and (not n.name.startswith("_") or n.name == "__init__"):
+                    out += self._func_paths(n)
+                elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name) and not n.target.id.startswith("_"):
+                    out += self._expr_paths(n.annotation)
+            return out
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            return self._func_paths(node)
+        value = getattr(node, "value", None)
+        return self._expr_paths(value) if value is not None else []
+
+    def _func_paths(self, fn: ast.AST) -> list[list[str]]:
+        a = fn.args
+        params = a.posonlyargs + a.args + a.kwonlyargs + [x for x in (a.vararg, a.kwarg) if x is not None]
+        exprs = [p.annotation for p in params] + a.defaults + a.kw_defaults + [fn.returns]
+        return [segs for e in exprs if e is not None for segs in self._expr_paths(e)]
+
+    # 식 안의 이름 경로. Name 은 [이름], 속성 접근은 [머리, 속성...]. 문자열은 annotation 으로 읽는다
+    @classmethod
+    def _expr_paths(cls, node: ast.AST) -> list[list[str]]:
+        if isinstance(node, ast.Name):
+            return [[node.id]]
+        if isinstance(node, ast.Attribute):
+            chain: list[str] = []
+            root: ast.AST = node
+            while isinstance(root, ast.Attribute):
+                chain.insert(0, root.attr)
+                root = root.value
+            if isinstance(root, ast.Name):
+                return [[root.id, *chain]]
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            try:
+                return cls._expr_paths(ast.parse(node.value, mode="eval").body)
+            except SyntaxError:
+                return []
+        return [segs for c in ast.iter_child_nodes(node) for segs in cls._expr_paths(c)]
 
     # 모듈 폴더 바로 아래 파일마다 클래스 수. 같은 파일의 클래스를 상속하는 이름표 클래스는 세지 않는다 (예외 계층은 기반 하나로 센다)
     def class_counts(self, module_dir: Path) -> list[tuple[str, int]]:

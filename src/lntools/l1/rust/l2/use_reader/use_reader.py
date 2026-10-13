@@ -24,6 +24,7 @@ class UseReader:
         self.paths = PathResolver(package_root)
         # 파일 -> ((수정 시각, 크기, 폴더 목록 세대), 결과). 같은 파일을 import 와 impl 로 두 번 읽으므로 기억한다
         self._cache: dict[Path, tuple[tuple[int, int, int], tuple[list[RawImport], list[RawImpl]]]] = {}
+        self._scopes: dict[Path, tuple[tuple[int, int, int], tuple | None]] = {}   # 파일 -> (같은 열쇠, 타입 경로 풀기용 이름 묶음)
 
     # 문법 오류는 SyntaxError 로 올린다
     def read(self, file: Path) -> list[RawImport]:
@@ -232,6 +233,67 @@ class UseReader:
             found = self.paths.resolve(here, segs, child_mods)
             return ".".join(["crate", *found[0]]) if found is not None else None
         return None
+
+    # ---- 타입 경로 풀기 ----
+
+    # file 최상위에서 쓴 타입 경로(Order, order::Order, crate::l1::Order)가 가리키는 곳. (정의된 곳의 절대 점 경로, 원래 이름)
+    # 모듈 glob(use crate::l1::*)처럼 이름 하나를 정할 수 없으면 후보마다 하나씩. 패키지 밖이거나 풀리지 않으면 빈 목록
+    def resolve_type(self, file: Path, segments: list[str]) -> list[tuple[str, str]]:
+        scope = self._type_scope(file)
+        if scope is None or not segments:
+            return []
+        here, child_mods, local, uses, globs = scope
+        head = segments[0]
+        if head in uses:
+            used = uses[head]
+            if used is None:
+                return []
+            mod, name = used
+            if name is not None:
+                return [(".".join(["crate", *mod]), name)]   # Kind::Assoc 는 Kind 를 쓴다
+            mod, name = self.paths.split(mod, segments[1:])
+            return [(".".join(["crate", *mod]), name)] if name else []
+        if head in local:
+            return [(".".join(["crate", *here]), head)]
+        found = self.paths.resolve(here, segments, child_mods)
+        if found is not None:
+            return [(".".join(["crate", *found[0]]), found[1])] if found[1] else []
+        return [(g, head) for g in globs] if len(segments) == 1 else []
+
+    # 파일 최상위의 이름 묶음. (모듈 경로, 자식 모듈, 정의한 이름, use 로 들인 이름 -> (모듈 경로, 원래 이름. 모듈이면 None), 모듈 glob)
+    # use 로 들인 곳이 패키지 밖이면 None. 문법 오류나 패키지 밖 파일이면 None
+    def _type_scope(self, file: Path) -> tuple | None:
+        st = file.stat()
+        key = (st.st_mtime_ns, st.st_size, self.paths.generation)
+        hit = self._scopes.get(file)
+        if hit is not None and hit[0] == key:
+            return hit[1]
+        here = self.paths.module_path(file)
+        try:
+            root = SourceParser.parse(file) if here is not None else None
+        except SyntaxError:
+            root = None
+        scope = None
+        if root is not None:
+            items = list(SourceParser.items(root))
+            child_mods = {SourceParser.name_of(i) for i in items if i.type == "mod_item"}
+            local = {SourceParser.name_of(i) for i in items if i.type in DEF_ITEMS}
+            uses: dict[str, tuple[list[str], str | None] | None] = {}
+            globs: list[str] = []
+            for item in items:
+                arg = item.child_by_field_name("argument") if item.type == "use_declaration" else None
+                for segs, alias, glob in self._leaves(arg, []) if arg is not None else []:
+                    if segs and segs[-1] == "self":
+                        segs = segs[:-1]
+                    found = self.paths.resolve(here, segs, child_mods) if segs else None
+                    if glob:
+                        if found is not None and found[1] is None:
+                            globs.append(".".join(["crate", *found[0]]))
+                    elif segs:
+                        uses[alias or segs[-1]] = found
+            scope = (here, child_mods, local, uses, globs)
+        self._scopes[file] = (key, scope)
+        return scope
 
     # ---- 테스트 파일 ----
 

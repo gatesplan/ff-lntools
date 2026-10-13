@@ -10,6 +10,7 @@ _EXPORTS = {
     "RawImpl": "language",
     "RawImport": "language",
     "RawReexport": "language",
+    "RawTypeRef": "language",
     "Violation": "violation",
 }
 __all__ = list(_EXPORTS)

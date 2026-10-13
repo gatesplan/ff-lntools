@@ -100,4 +100,35 @@ def test_lines_summary(layout: ProjectLayout, graph: Graph):
 
 # 샘플의 Store.put(snap: TickSnapshot, ...) 은 표면에 없는 안쪽 타입을 쓴다. 바깥에서는 TickSnapshot 을 만들 수 없다
 def test_leaked_inner_type(layout: ProjectLayout, graph: Graph):
-    assert Reviewer(layout, graph, LANG).leaks() == [("l3.portfolio", "TickSnapshot", "l3.portfolio.l0.tick_snapshot")]
+    assert Reviewer(layout, graph, LANG).leaks() == [("l3.portfolio", "TickSnapshot", "l3.portfolio.l0.tick_snapshot", ["Store"])]
+    assert "  l3.portfolio: TickSnapshot (l3.portfolio.l0.tick_snapshot) <- Store" in Reviewer(layout, graph, LANG).lines()
+
+
+def _store(layout: ProjectLayout) -> Path:
+    return layout.package_root / "l3" / "portfolio" / "l1" / "store"
+
+
+# 문자열 annotation 도 타입이다
+def test_leak_through_string_annotation(layout: ProjectLayout):
+    f = _store(layout) / "store.py"
+    f.write_text(f.read_text(encoding="utf-8").replace("snap: TickSnapshot", "snap: 'TickSnapshot'"), encoding="utf-8")
+    assert [n for _, n, _, _ in _review(layout).leaks()] == ["TickSnapshot"]
+
+
+# 맨 위 층 모듈이 타입 별칭으로 꺼내 주면 감춘 타입이 아니다
+def test_leak_cleared_by_alias_export(layout: ProjectLayout):
+    (_store(layout) / "exposed.py").write_text(
+        "from typing import TypeAlias\n\nfrom ...l0.tick_snapshot import TickSnapshot as _TickSnapshot\n\n"
+        "TickSnapshot: TypeAlias = _TickSnapshot\n", encoding="utf-8")
+    assert _review(layout).leaks() == []
+
+
+# 이름 글자만 같은 인자 이름은 어휘가 아니다. 기본값으로 쓰는 타입은 호출하는 쪽이 알아야 하므로 어휘다
+def test_bypass_vocabulary_is_resolved_not_spelled(layout: ProjectLayout):
+    _ledger_and_audit(layout, "    def total(self, Order: int) -> float:\n        return 0.0\n")
+    assert _review(layout).bypasses("l3.audit") == [("l1.order", ["l2.ledger"])]
+
+
+def test_bypass_skipped_when_via_defaults_to_the_type(layout: ProjectLayout):
+    _ledger_and_audit(layout, "    def add(self, order=Order) -> None:\n        pass\n")
+    assert _review(layout).bypasses("l3.audit") == []

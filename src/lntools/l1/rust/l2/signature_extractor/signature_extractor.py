@@ -132,20 +132,38 @@ class SignatureExtractor:
     def extract(self, module_dir: Path, exported: list[str]) -> list[str]:
         return self._lines(module_dir, module_dir, exported, follow=True)
 
-    # search_dir 안에서 정의를 찾고, 줄 끝 파일 경로는 base_dir 기준으로 쓴다
-    def _lines(self, search_dir: Path, base_dir: Path, exported: list[str], follow: bool) -> list[str]:
-        defs: dict[str, tuple[SyntaxNode, str]] = {}
-        methods: dict[str, list[str]] = {}
-        traits: dict[str, list[str]] = {}
+    # 폴더 안(하위 폴더 포함) 최상위 정의와 impl. (이름 -> (정의, 파일), 타입 이름 -> [(impl, 파일)])
+    def _index(self, search_dir: Path) -> tuple[dict[str, tuple[SyntaxNode, Path]], dict[str, list[tuple[SyntaxNode, Path]]]]:
+        defs: dict[str, tuple[SyntaxNode, Path]] = {}
+        impls: dict[str, list[tuple[SyntaxNode, Path]]] = {}
         for f in self._source_files(search_dir):
             root = self._parse(f)
-            rel = f.relative_to(base_dir).as_posix()
             for item in SourceParser.items(root) if root is not None else []:
                 name = SourceParser.name_of(item)
                 if item.type in NAMED_ITEMS and name:
-                    defs.setdefault(name, (item, rel))
+                    defs.setdefault(name, (item, f))
                 elif item.type == "impl_item":
-                    self._collect_impl(item, rel, methods, traits)
+                    ty = self._impl_type(item)
+                    if ty is not None:
+                        impls.setdefault(ty, []).append((item, f))
+        return defs, impls
+
+    @staticmethod
+    def _impl_type(item: SyntaxNode) -> str | None:
+        ty = item.child_by_field_name("type")
+        while ty is not None and ty.type == "generic_type":
+            ty = ty.child_by_field_name("type")
+        return SourceParser.segments(ty)[-1] if ty is not None else None
+
+    # search_dir 안에서 정의를 찾고, 줄 끝 파일 경로는 base_dir 기준으로 쓴다
+    def _lines(self, search_dir: Path, base_dir: Path, exported: list[str], follow: bool) -> list[str]:
+        index, impls = self._index(search_dir)
+        defs = {n: (item, f.relative_to(base_dir).as_posix()) for n, (item, f) in index.items()}
+        methods: dict[str, list[str]] = {}
+        traits: dict[str, list[str]] = {}
+        for name, found in impls.items():
+            for item, f in found:
+                self._collect_impl(item, name, f.relative_to(base_dir).as_posix(), methods, traits)
         lines: list[str] = []
         reexports: dict[str, RawReexport] | None = None
         for name in exported:
@@ -191,13 +209,7 @@ class SignatureExtractor:
             d = d.parent.parent
         return d
 
-    def _collect_impl(self, item: SyntaxNode, rel: str, methods: dict[str, list[str]], traits: dict[str, list[str]]) -> None:
-        ty = item.child_by_field_name("type")
-        while ty is not None and ty.type == "generic_type":
-            ty = ty.child_by_field_name("type")
-        if ty is None:
-            return
-        name = SourceParser.segments(ty)[-1]
+    def _collect_impl(self, item: SyntaxNode, name: str, rel: str, methods: dict[str, list[str]], traits: dict[str, list[str]]) -> None:
         trait = item.child_by_field_name("trait")
         if trait is not None:
             traits.setdefault(name, []).append(f"{name}: impl {SourceParser.flat(trait)}  # {rel}")
@@ -260,26 +272,130 @@ class SignatureExtractor:
         rs = f" -> {SourceParser.flat(ret)}" if ret is not None else ""
         return f"{prefix}{SourceParser.name_of(fn)}{ps}{rs}  # {rel}"
 
-    # words 에 든 타입 별칭(type Answer = Result<Order, Error>)을 풀어 그 안의 이름까지 더한다
-    def expand_aliases(self, module_dir: Path, words: set[str]) -> set[str]:
-        names = set(words)
-        for f in self._source_files(module_dir):
-            root = self._parse(f)
-            for item in SourceParser.items(root) if root is not None else []:
-                if item.type == "type_item" and SourceParser.name_of(item) in names:
-                    names |= self._identifiers(item.child_by_field_name("type"))
-        return names
+    # 공개 이름들의 시그니처가 타입 자리에 쓰는 경로. (공개 이름, 쓴 경로 조각, 그 시그니처가 있는 파일, 공개 이름 자신인지)
+    # 공개 필드, 변형이 품은 타입, pub 메서드와 트레이트 메서드의 인자와 반환, 제네릭 경계, 구현한 트레이트, 타입 별칭의 값
+    # 변형 이름은 타입이 아니라 넣지 않는다. 제네릭 인자와 Self 도 넣지 않는다
+    # 다시 내보낸 이름은 원래 정의를 따라가고, 쓰인 이름이 폴더 안 타입 별칭이면 그 값까지 따라간다
+    def type_refs(self, module_dir: Path, exported: list[str]) -> list[tuple[str, list[str], Path, bool]]:
+        return self._refs(module_dir, exported, follow=True)
 
-    @staticmethod
-    def _identifiers(node: SyntaxNode | None) -> set[str]:
-        if node is None:
-            return set()
-        if node.type == "type_identifier":
-            return {SourceParser.text(node)}
-        out: set[str] = set()
-        for c in node.named_children:
-            out |= SignatureExtractor._identifiers(c)
+    # 반환 원소의 마지막은 그 경로가 공개 이름 자신인지 (자기 정의, pub use 의 경로, 경로 하나로 된 타입 별칭의 값)
+    def _refs(self, search_dir: Path, exported: list[str], follow: bool) -> list[tuple[str, list[str], Path, bool]]:
+        defs, impls = self._index(search_dir)
+        aliases = {n: (item, f) for n, (item, f) in defs.items() if item.type == "type_item"}
+        out: list[tuple[str, list[str], Path, bool]] = []
+        reexports: dict[str, RawReexport] | None = None
+        for name in exported:
+            found = defs.get(name)
+            if found is None and follow:
+                if reexports is None:
+                    reexports = self._reexports_within(search_dir)
+                r = reexports.get(name)
+                if r is not None:
+                    out.append((name, r.path.split("::"), r.file, True))
+                    target = self._package_root(search_dir).joinpath(*r.target.split(".")[1:]) if r.target is not None else None
+                    if target is not None and target.is_dir():
+                        out.extend((name, segs, f, same) for _, segs, f, same in self._refs(target, [r.path.rsplit("::", 1)[-1]], follow=False))
+                continue
+            if found is None:
+                continue
+            item, f = found
+            out.append((name, [name], f, True))
+            same = item.type == "type_item" and item.child_by_field_name("type").type in ("type_identifier", "scoped_type_identifier")
+            todo = [(segs, f, same) for segs in self._item_paths(item)]
+            for impl, impl_file in impls.get(name, []):
+                todo.extend((segs, impl_file, False) for segs in self._impl_paths(impl))
+            seen: set[str] = set()
+            while todo:
+                segs, at, same = todo.pop(0)
+                out.append((name, segs, at, same))
+                if len(segs) == 1 and segs[0] in aliases and segs[0] not in seen:
+                    seen.add(segs[0])
+                    alias, alias_file = aliases[segs[0]]
+                    todo.extend((x, alias_file, False) for x in self._item_paths(alias))
         return out
+
+    # 정의 하나의 시그니처가 타입 자리에 쓰는 경로
+    def _item_paths(self, item: SyntaxNode) -> list[list[str]]:
+        skip = self._type_params(item)
+        body = item.child_by_field_name("body")
+        if item.type in ("struct_item", "union_item"):
+            return [p for t in self._field_types(body, pub_only=True) for p in self._type_paths(t, skip)] if body is not None else []
+        if item.type == "enum_item":
+            out: list[list[str]] = []
+            for v in SourceParser.items(body) if body is not None else []:
+                vb = v.child_by_field_name("body")
+                out += [p for t in self._field_types(vb, pub_only=False) for p in self._type_paths(t, skip)] if vb is not None else []
+            return out
+        if item.type == "trait_item":
+            return [p for fn in (SourceParser.items(body) if body is not None else [])
+                    if fn.type in ("function_signature_item", "function_item") for p in self._fn_paths(fn, skip)]
+        if item.type == "type_item":
+            return self._type_paths(item.child_by_field_name("type"), skip)
+        if item.type == "function_item":
+            return self._fn_paths(item, skip)
+        return []
+
+    # impl 하나가 시그니처에 더하는 경로. 고유 impl 은 pub 메서드, 트레이트 impl 은 그 트레이트
+    def _impl_paths(self, item: SyntaxNode) -> list[list[str]]:
+        skip = self._type_params(item)
+        trait = item.child_by_field_name("trait")
+        if trait is not None:
+            return self._type_paths(trait, skip)
+        body = item.child_by_field_name("body")
+        return [p for fn in (SourceParser.items(body) if body is not None else [])
+                if fn.type == "function_item" and SourceParser.is_pub(fn) for p in self._fn_paths(fn, skip)]
+
+    def _fn_paths(self, fn: SyntaxNode, skip: set[str]) -> list[list[str]]:
+        skip = skip | self._type_params(fn)
+        out: list[list[str]] = []
+        for field in ("parameters", "return_type", "type_parameters"):
+            out += self._type_paths(fn.child_by_field_name(field), skip)
+        for c in fn.named_children:
+            if c.type == "where_clause":
+                out += self._type_paths(c, skip)
+        return out
+
+    # 필드 목록의 타입 노드. 이름 있는 필드는 그 type, 튜플 필드는 그 자체. pub_only 면 pub 필드만
+    @staticmethod
+    def _field_types(body: SyntaxNode, pub_only: bool) -> list[SyntaxNode]:
+        if body.type == "ordered_field_declaration_list":
+            out: list[SyntaxNode] = []
+            vis = ""
+            for c in body.named_children:
+                if c.type == "visibility_modifier":
+                    vis = SourceParser.text(c)
+                elif c.type != "attribute_item":
+                    if vis == "pub" or not pub_only:
+                        out.append(c)
+                    vis = ""
+            return out
+        return [f.child_by_field_name("type") for f in body.named_children
+                if f.type == "field_declaration" and (SourceParser.is_pub(f) or not pub_only) and f.child_by_field_name("type") is not None]
+
+    # 항목의 제네릭 인자 이름과 Self. 패키지의 타입이 아니다
+    @staticmethod
+    def _type_params(item: SyntaxNode) -> set[str]:
+        out = {"Self"}
+        tp = item.child_by_field_name("type_parameters")
+        for c in tp.named_children if tp is not None else []:
+            n = c.child_by_field_name("name") or next((x for x in c.named_children if x.type == "type_identifier"), None)
+            if n is not None:
+                out.add(SourceParser.text(n))
+        return out
+
+    # 노드 아래 타입 경로. 경로 하나(order::Order)는 통째로 하나다. 수명과 기본 타입은 빼고, 제네릭 인자로 시작하는 경로(T::Item)도 뺀다
+    @classmethod
+    def _type_paths(cls, node: SyntaxNode | None, skip: set[str]) -> list[list[str]]:
+        if node is None or node.type in ("lifetime", "primitive_type", "self_parameter"):
+            return []
+        if node.type == "type_identifier":
+            name = SourceParser.text(node)
+            return [] if name in skip else [[name]]
+        if node.type in ("scoped_type_identifier", "scoped_identifier"):
+            segs = SourceParser.segments(node)
+            return [] if not segs or segs[0] in skip else [segs]
+        return [p for c in node.named_children for p in cls._type_paths(c, skip)]
 
     # 모듈 폴더 바로 아래 파일마다 (파일 이름, struct, enum, union, trait 수)
     def class_counts(self, module_dir: Path) -> list[tuple[str, int]]:

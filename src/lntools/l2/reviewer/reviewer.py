@@ -1,5 +1,3 @@
-import re
-
 from ...l0.language import Language
 from ...l0.project_layout import ProjectLayout
 from ...l1.graph import Graph
@@ -15,7 +13,7 @@ class Reviewer:
         self.pkg = layout.package_name
         self.surface = Surface(layout, graph.modules, language)
         self._reach_cache: dict[str, set[str]] = {}
-        self._sig_cache: dict[str, str] = {}
+        self._iface_cache: dict[str, list[tuple[str, str, str, bool]]] = {}
 
     # 스코프의 맨 위 층. 진입점이 놓이는 곳이라 우회와 고아 판정에서 뺀다
     def _top(self, scope: str) -> int:
@@ -37,20 +35,31 @@ class Reviewer:
             self._reach_cache[name] = seen
         return self._reach_cache[name]
 
-    def _signature_text(self, name: str) -> str:
-        if name not in self._sig_cache:
-            path = self.graph.modules[name].path
-            self._sig_cache[name] = "\n".join(self.language.signatures(path, sorted(self.surface.of_module(name))))
-        return self._sig_cache[name]
+    # a 의 공개 시그니처가 쓰는 패키지 안 타입. [(쓰는 공개 이름, 정의된 모듈, 이름, 공개 이름 자신인지)]. 그 모듈의 공개 이름인 것만
+    # 이름은 그 시그니처가 있는 파일의 import 로 풀어 정의된 모듈을 찾는다. 글자가 같다고 같은 타입으로 보지 않는다
+    def _interface(self, a: str) -> list[tuple[str, str, str, bool]]:
+        if a not in self._iface_cache:
+            m = self.graph.modules[a]
+            out: list[tuple[str, str, str, bool]] = []
+            for r in self.language.signature_types(m.path, self.layout.package_root, sorted(self.surface.of_module(a))):
+                d = self._owner_of(r.target, r.name)
+                ref = (r.owner, d, r.name, r.is_owner)
+                if d is not None and r.name in self.surface.of_module(d) and ref not in out:
+                    out.append(ref)
+            self._iface_cache[a] = out
+        return self._iface_cache[a]
 
-    # a 의 공개 시그니처에 나오는 이름. 시그니처에 쓰인 모듈 수준 타입 별칭은 그 안의 이름까지 (EntityType = Union[Character, ...])
-    def _interface_names(self, a: str) -> set[str]:
-        names = set(re.findall(r"[A-Za-z_]\w*", self._signature_text(a)))
-        return self.language.expand_aliases(self.graph.modules[a].path, names)
+    # 절대 점 경로에 있는 이름 하나가 정의된 모듈. 층이나 패키지 루트를 가리키면 그 표면으로 푼다. 패키지 안 모듈이 아니면 None
+    def _owner_of(self, target: str, name: str) -> str | None:
+        rel = target.split(".", 1)[1] if "." in target else ""
+        if not rel:
+            path = self.surface.of_root().get(name)
+            return path if path in self.graph.modules else None
+        return next(iter(self._resolve(rel, [name])), None)
 
-    # a 의 공개 시그니처에 b 의 공개 이름이 나오면 b 는 a 를 쓰는 데 필요한 어휘다. 그때 b 를 직접 쓰는 것은 우회가 아니다
+    # a 의 공개 시그니처에 b 에 정의된 타입이 나오면 b 는 a 를 쓰는 데 필요한 어휘다. 그때 b 를 직접 쓰는 것은 우회가 아니다
     def _takes(self, a: str, b: str) -> bool:
-        return bool(set(self.surface.of_module(b)) & self._interface_names(a))
+        return any(d == b for _, d, _, _ in self._interface(a))
 
     # 우회: name 이 직접 쓰는 b 를, name 이 쓰는 다른 모듈도 (거쳐서) 쓴다. 반환: [(b, [그 다른 모듈...])]
     # b 가 l0 이면 어휘로 보고 뺀다. name 이 맨 위 층이거나 b 를 받는 모듈에 넘겨 주는 경우는 조립이므로 뺀다
@@ -90,23 +99,25 @@ class Reviewer:
             out.extend((name, f, k) for f, k in self.language.class_counts(m.path) if k > 1)
         return out
 
-    # 숨은 타입 노출: 중첩 모듈 맨 위 층의 공개 시그니처가 표면에 없는 안쪽 이름을 쓴다. 바깥에서는 그 타입을 만들 수 없다
-    # 반환: [(중첩 모듈, 숨은 이름, 그 이름을 내놓는 안쪽 모듈)]
-    def leaks(self) -> list[tuple[str, str, str]]:
-        out: list[tuple[str, str, str]] = []
+    # 숨은 타입 노출: 중첩 모듈 표면의 공개 시그니처가 표면이 내놓지 않는 안쪽 타입을 쓴다. 바깥에서는 그 타입을 쓸 수 없다
+    # 표면이 내놓는 것은 이름이 아니라 정의로 본다. 맨 위 층 모듈의 정의, 그것이 다시 내보내는 원래 정의, 경로 하나로 된 타입 별칭이 가리키는 정의
+    # 반환: [(중첩 모듈, 숨은 이름, 그 이름을 정의한 안쪽 모듈, [그 타입을 쓰는 공개 이름...])]
+    def leaks(self) -> list[tuple[str, str, str, list[str]]]:
+        out: list[tuple[str, str, str, list[str]]] = []
         for name, m in sorted(self.graph.modules.items()):
-            inner = [x for x in self.graph.modules.values() if x.scope == name]
-            if not m.is_nested or not inner:
+            if not m.is_nested or not any(x.scope == name for x in self.graph.modules.values()):
                 continue
-            public = set(self.surface.of_module(name))
-            top = max(x.layer for x in inner)
-            words: set[str] = set()
-            for x in inner:
-                if x.layer == top:
-                    words |= set(re.findall(r"[A-Za-z_]\w*", self._signature_text(x.name)))
-            for x in sorted(inner, key=lambda x: x.name):
-                if x.layer < top:
-                    out.extend((name, h, x.name) for h in sorted(set(self.surface.of_module(x.name)) - public) if h in words)
+            public = self.surface.of_module(name)
+            refs = [(owner, d, n, same) for t in sorted({f"{name}.{rel}" for rel in public.values()}) if t in self.graph.modules
+                    for owner, d, n, same in self._interface(t) if public.get(owner) == t[len(name) + 1:]]
+            shown = {(d, n) for _, d, n, same in refs if same}
+            hidden: dict[tuple[str, str], list[str]] = {}
+            for owner, d, n, same in refs:
+                if not same and d.startswith(name + ".") and (d, n) not in shown:
+                    users = hidden.setdefault((d, n), [])
+                    if owner not in users:
+                        users.append(owner)
+            out.extend((name, n, d, sorted(users)) for (d, n), users in sorted(hidden.items(), key=lambda x: (x[0][1], x[0][0])))
         return out
 
     def lines(self) -> list[str]:
@@ -126,7 +137,7 @@ class Reviewer:
         leaks = self.leaks()
         if leaks:
             out.append("숨은 타입 노출: 중첩 모듈의 공개 시그니처가 표면에 없는 타입을 쓴다. 맨 위 층으로 올리거나, 맨 위 층 모듈에서 꺼내 주거나(타입 별칭, Rust 트레이트는 pub use), 중첩 모듈 밖으로 뺀다")
-            out.extend(f"  {n}: {h} ({src})" for n, h, src in leaks)
+            out.extend(f"  {n}: {h} ({src}) <- {', '.join(users)}" for n, h, src, users in leaks)
         out.append(f"점검 대상 {len(found) + len(orphans) + len(crowded) + len(leaks)}건")
         return out
 
