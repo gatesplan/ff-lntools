@@ -1,4 +1,12 @@
 import importlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .blaster import Blaster as Blaster
+    from .checker import Checker as Checker
+    from .doc_generator import DocGenerator as DocGenerator
+    from .reviewer import Reviewer as Reviewer
+    from .signature_lister import SignatureLister as SignatureLister
 
 # 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {

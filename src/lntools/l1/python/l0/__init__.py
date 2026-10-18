@@ -1,4 +1,11 @@
 import importlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .import_reader import ImportReader as ImportReader
+    from .import_rewriter import ImportRewriter as ImportRewriter
+    from .signature_extractor import SignatureExtractor as SignatureExtractor
+    from .surface_renderer import SurfaceRenderer as SurfaceRenderer
 
 # 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {

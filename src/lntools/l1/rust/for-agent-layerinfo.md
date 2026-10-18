@@ -2,19 +2,19 @@
 
 <!-- lnt:generated:start -->
 ## l0
-- path_resolver: Rust 경로가 패키지의 어느 모듈을 가리키는지 푼다
-- surface_renderer: 표면 파일이 어떤 모양인지 정한다
+- path_resolver: Rust 경로를 받아, 경로가 가리키는 패키지 안 모듈과 이름을 돌려준다
+- surface_renderer: 표면 종류와 공개 이름 목록을 받아 mod.rs 나 lib.rs 의 내용을 돌려준다
 
 ## l1
-- source_parser: Rust 소스를 문법 트리로 읽는다
+- source_parser: Rust 파일을 받아 문법 트리를 돌려준다
 
 ## l2
-- signature_extractor: 소스 파일에 무엇이 정의되어 있는지 읽어 낸다
-- use_reader: 소스 파일이 무엇에 기대고 어디에 덧붙는지 읽어 낸다
-- use_rewriter: 모듈이 옮겨 갈 때 그 모듈을 가리키는 경로를 맞춘다
+- signature_extractor: 모듈 폴더를 받아 공개 항목과 공개 메서드의 시그니처를 돌려준다
+- use_reader: Rust 파일을 받아, 파일 안의 use 가 가리키는 모듈과 impl 블록의 위치를 돌려준다
+- use_rewriter: Rust 파일과 모듈의 옛 위치, 새 위치를 받아, 옛 위치를 가리키는 use 경로를 새 위치로 고친다
 
 ## l3
-- rust_language: Rust 의 읽기와 쓰기를 lnt 의 언어 약속에 맞춰 묶는다
+- rust_language: 아래 층 모듈들을 조립해 언어 인터페이스를 Rust 용으로 구현한다
 <!-- lnt:generated:end -->
 
 ## Notes

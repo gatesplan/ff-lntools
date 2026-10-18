@@ -2,13 +2,13 @@
 
 <!-- lnt:generated:start -->
 ## l0
-- import_reader: 소스 파일이 무엇에 기대는지 읽어 낸다
-- import_rewriter: 모듈이 옮겨 갈 때 그 모듈을 가리키는 import 를 맞춘다
-- signature_extractor: 소스 파일에 무엇이 정의되어 있는지 읽어 낸다
-- surface_renderer: 표면 파일이 어떤 모양인지 정한다
+- import_reader: Python 파일을 받아, 파일 안의 import 문이 가리키는 모듈과 이름을 돌려준다
+- import_rewriter: Python 파일과 모듈의 옛 위치, 새 위치를 받아, 옛 위치를 가리키는 import 문을 새 위치로 고친다
+- signature_extractor: 모듈 폴더를 받아 공개 클래스와 공개 메서드의 시그니처를 돌려준다
+- surface_renderer: 표면 종류와 공개 이름 목록을 받아 __init__.py 의 내용을 돌려준다
 
 ## l1
-- python_language: Python 의 읽기와 쓰기를 lnt 의 언어 약속에 맞춰 묶는다
+- python_language: 아래 층 모듈들을 조립해 언어 인터페이스를 Python 용으로 구현한다
 <!-- lnt:generated:end -->
 
 ## Notes

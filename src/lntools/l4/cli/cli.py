@@ -70,7 +70,7 @@ class Cli:
         s = sub.add_parser("sig", help="공개 시그니처 조회. 문서로 두지 않고 그 자리에서 계산")
         s.add_argument("targets", nargs="*", help="층(l1), 모듈(l1.order), 모듈 이름(order). 없으면 전체")
 
-        sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출. 위반이 아니라 exit 0")
+        sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출, 꺼내 주기. 위반이 아니라 exit 0")
 
         mv = sub.add_parser("move", help="모듈을 다른 층으로 이동. import, tests 미러, 표면 파일, 문서 갱신")
         mv.add_argument("module")

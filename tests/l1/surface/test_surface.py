@@ -61,6 +61,30 @@ def test_rendered_inits_import(layout: ProjectLayout, graph: Graph, monkeypatch)
     assert importlib.import_module("shop.l1").Order.__name__ == "Order"
 
 
+# 지연 표면은 타입 검사기용 재노출을 TYPE_CHECKING 안에 둔다. 실행 중에는 이름을 쓸 때까지 하위 모듈을 읽지 않는다
+def test_lazy_surface_reexports_for_type_checkers(layout: ProjectLayout, graph: Graph, monkeypatch):
+    out = Surface(layout, graph.modules, LANG).render()
+    pkg = layout.package_root
+    layer_text = out[pkg / "l1" / "__init__.py"]
+    assert "if TYPE_CHECKING:\n" in layer_text and "    from .order import Order as Order\n" in layer_text
+    assert "    from .l1.store import Store as Store\n" in out[pkg / "l3" / "portfolio" / "__init__.py"]
+    for p, text in out.items():
+        p.write_text(text, encoding="utf-8")
+    monkeypatch.syspath_prepend(str(layout.src_dir))
+    import importlib
+    import sys
+    for name in [n for n in list(sys.modules) if n == "shop" or n.startswith("shop.")]:
+        del sys.modules[name]
+    layer = importlib.import_module("shop.l1")
+    assert "shop.l1.order" not in sys.modules
+    assert layer.Order.__name__ == "Order" and "shop.l1.order" in sys.modules
+
+
+# 공개 이름이 없는 지연 표면도 문법이 맞다
+def test_empty_lazy_surface_is_valid_python():
+    compile(LANG.render_surface(Path("."), "layer", {}), "<surface>", "exec")
+
+
 def test_unreadable_file_is_reported(layout: ProjectLayout):
     bad = layout.package_root / "l0" / "candle" / "broken.py"
     bad.write_text("class (:\n", encoding="utf-8")

@@ -16,6 +16,15 @@ from ...l2.doc_generator import DocGenerator
 # Claude Code 훅 진입. stdin JSON 을 읽고 exit code 와 출력 채널을 정한다
 # pick: 패키지 위치를 받아 그 패키지의 언어를 고른다 (고르는 기준은 cli 가 정한다)
 class HookRunner:
+    # 지도 뒤에 붙이는 구조 찾는 순서. 지도만으로는 에이전트가 lnt 조회 명령을 거의 쓰지 않는다
+    FIND_GUIDE = (
+        "[lnt] 구조를 찾을 때는 이 순서로 본다\n"
+        "1. 위 지도의 책임 줄로 모듈을 고른다.\n"
+        "2. lnt sig <모듈> 로 공개 클래스와 시그니처를 본다.\n"
+        "3. 모듈 폴더의 코드를 읽는다. grep 은 지도와 시그니처로 찾지 못할 때 쓴다.\n"
+        "고치기 전에 lnt blast <모듈> 로 영향받는 상위 모듈을 확인한다.\n"
+    )
+
     def __init__(self, stdin_text: str, cwd: Path, pick: Callable[[ProjectLayout], Language]):
         self.cwd = cwd
         self.pick = pick
@@ -26,12 +35,21 @@ class HookRunner:
 
     # SessionStart: layerinfo 를 stdout 으로. stdout 은 컨텍스트에 주입된다. ln 패키지가 여럿이면 패키지마다
     def session_start(self) -> int:
+        shown_any = False
         for layout in ProjectLayout.find_all(self.cwd):
             p = layout.package_root / "for-agent-layerinfo.md"
             if p.is_file():
-                sys.stdout.write(f"[lnt] {layout.relative(p)}\n")
+                shown_any = True
+                # 세션 위치 기준 경로. 하위 프로젝트(backend/src 등)의 지도도 에이전트가 그대로 찾아 열 수 있게
+                try:
+                    shown = p.resolve().relative_to(self.cwd.resolve()).as_posix()
+                except ValueError:
+                    shown = layout.relative(p)
+                sys.stdout.write(f"[lnt] {shown}\n")
                 sys.stdout.write(p.read_text(encoding="utf-8"))
                 sys.stdout.write("\n")
+        if shown_any:
+            sys.stdout.write(self.FIND_GUIDE)
         return 0
 
     # PostToolUse(Edit|Write): 위반은 exit 2 + stderr, 정보는 additionalContext

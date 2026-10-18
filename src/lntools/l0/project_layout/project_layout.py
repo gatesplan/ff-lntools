@@ -41,25 +41,36 @@ class ProjectLayout:
         return found[0] if found else None
 
     # find 와 같은 프로젝트의 ln 패키지 전부, 이름순. 시작 위치가 한 패키지 안이면 그 패키지 하나
+    # 위로 올라가도 없고 시작 위치가 저장소 루트(.git)면 한 단계 아래 폴더의 src 도 본다 (backend/src 같은 하위 프로젝트)
     @classmethod
     def find_all(cls, start: Path) -> "list[ProjectLayout]":
         start = start.resolve()
         if start.is_file():
             start = start.parent
         for p in [start, *start.parents]:
-            src = p / "src"
-            if not src.is_dir():
+            found = cls._packages(p)
+            if not found:
                 continue
-            candidates = [c for c in sorted(src.iterdir()) if cls.has_layers(c)]
-            if not candidates:
-                if cls.has_layers(src):
-                    return [cls(p, src)]
-                continue
-            for c in candidates:
-                if start == c or c in start.parents:
-                    return [cls(p, c)]
-            return [cls(p, c) for c in candidates]
-        return []
+            for lo in found:
+                if start == lo.package_root or lo.package_root in start.parents:
+                    return [lo]
+            return found
+        if not (start / ".git").exists():
+            return []
+        # 자기 .git 을 가진 하위 폴더는 다른 저장소라 보지 않는다
+        below = [d for d in sorted(start.iterdir()) if d.is_dir() and not d.name.startswith(".") and not (d / ".git").exists()]
+        return [lo for d in below for lo in cls._packages(d)]
+
+    # project_root/src 아래의 ln 패키지. src/<pkg>/lN 이 없고 src/lN 이 있으면 src 자체(Rust 크레이트)
+    @classmethod
+    def _packages(cls, project_root: Path) -> "list[ProjectLayout]":
+        src = project_root / "src"
+        if not src.is_dir():
+            return []
+        candidates = [c for c in sorted(src.iterdir()) if cls.has_layers(c)]
+        if candidates:
+            return [cls(project_root, c) for c in candidates]
+        return [cls(project_root, src)] if cls.has_layers(src) else []
 
     def relative(self, path: Path) -> str:
         try:

@@ -71,7 +71,14 @@ def test_non_python_or_outside_is_silent(sample: Path, capsys):
 def test_session_start_prints_layerinfo(sample: Path, capsys):
     (sample / "src/shop/for-agent-layerinfo.md").write_text("# info\n", encoding="utf-8")
     assert HookRunner("", sample, lambda _: LANG).session_start() == 0
-    assert "# info" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "# info" in out and "lnt sig <모듈>" in out
+
+
+# ln 패키지가 없으면 지도도 찾는 순서도 내지 않는다
+def test_session_start_without_package_prints_nothing(tmp_path: Path, capsys):
+    assert HookRunner("", tmp_path, lambda _: LANG).session_start() == 0
+    assert capsys.readouterr().out == ""
 
 
 # 편집한 범위의 layerinfo 에 [설명 필요] 가 있으면 기준과 함께 알린다

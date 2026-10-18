@@ -115,12 +115,25 @@ def test_leak_through_string_annotation(layout: ProjectLayout):
     assert [n for _, n, _, _ in _review(layout).leaks()] == ["TickSnapshot"]
 
 
-# 맨 위 층 모듈이 타입 별칭으로 꺼내 주면 감춘 타입이 아니다
+# 맨 위 층 모듈이 타입 별칭으로 꺼내 주면 감춘 타입이 아니다. 대신 꺼내 주기로 점검 대상에 오른다
 def test_leak_cleared_by_alias_export(layout: ProjectLayout):
     (_store(layout) / "exposed.py").write_text(
         "from typing import TypeAlias\n\nfrom ...l0.tick_snapshot import TickSnapshot as _TickSnapshot\n\n"
         "TickSnapshot: TypeAlias = _TickSnapshot\n", encoding="utf-8")
-    assert _review(layout).leaks() == []
+    review = _review(layout)
+    assert review.leaks() == []
+    assert review.reexports("l3.portfolio") == ["TickSnapshot"]
+    lines = review.lines()
+    assert any(s.startswith("꺼내 주기:") for s in lines) and "  l3.portfolio: 1개 (TickSnapshot)" in lines
+
+
+# 숨은 타입이나 꺼내 주기가 있는 중첩 모듈은 바깥 모듈마다 가져가는 이름을 보인다
+def test_name_bundles_for_nested_module(layout: ProjectLayout, graph: Graph):
+    review = Reviewer(layout, graph, LANG)
+    assert review.name_bundles("l3.portfolio") == [("l4.app", ["Store"])]
+    lines = review.lines()
+    i = lines.index("  l3.portfolio")
+    assert lines[i - 1].startswith("바깥 모듈마다 가져가는 이름:") and lines[i + 1] == "    l4.app: Store"
 
 
 # 이름 글자만 같은 인자 이름은 어휘가 아니다. 기본값으로 쓰는 타입은 호출하는 쪽이 알아야 하므로 어휘다

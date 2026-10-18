@@ -1,4 +1,9 @@
 import importlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .path_resolver import PathResolver as PathResolver
+    from .surface_renderer import SurfaceRenderer as SurfaceRenderer
 
 # 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {

@@ -1,4 +1,13 @@
 import importlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .edge import Edge as Edge
+    from .initializer import Initializer as Initializer
+    from .language import Language as Language, RawImpl as RawImpl, RawImport as RawImport, RawReexport as RawReexport, RawTypeRef as RawTypeRef
+    from .module_ref import ModuleRef as ModuleRef
+    from .project_layout import ProjectLayout as ProjectLayout
+    from .violation import Violation as Violation
 
 # 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {

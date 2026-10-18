@@ -4,7 +4,7 @@ from ...l1.graph import Graph
 from ...l1.surface import Surface
 
 
-# lnt review. 위반은 아니지만 한 번 볼 만한 구조: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출
+# lnt review. 위반은 아니지만 한 번 볼 만한 구조: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출, 꺼내 주기
 class Reviewer:
     def __init__(self, layout: ProjectLayout, graph: Graph, language: Language):
         self.layout = layout
@@ -120,6 +120,30 @@ class Reviewer:
             out.extend((name, n, d, sorted(users)) for (d, n), users in sorted(hidden.items(), key=lambda x: (x[0][1], x[0][0])))
         return out
 
+    # 꺼내 주기: 중첩 모듈의 맨 위 층 모듈이 다시 내보내는 아래 층 이름. 다시 내보내기(Rust pub use)와 경로 하나로 된 타입 별칭
+    # 새로 쓰지 않는 방식이라 점검 대상으로 보인다
+    def reexports(self, name: str) -> list[str]:
+        inner = [x for x in self.graph.modules.values() if x.scope == name]
+        if not self.graph.modules[name].is_nested or not inner:
+            return []
+        top = max(x.layer for x in inner)
+        tops = {x.name for x in inner if x.layer == top}
+        public = self.surface.of_module(name)
+        out: set[str] = set()
+        for t in sorted(tops):
+            out |= set(self.surface.reexports(t)[0])
+            out |= {owner for owner, d, _, same in self._interface(t)
+                    if same and d not in tops and d.startswith(name + ".") and public.get(owner) == t[len(name) + 1:]}
+        return sorted(out)
+
+    # 바깥 모듈마다 name 에서 가져가는 이름. [(바깥 모듈, [이름...])]. 묶음이 서로 다르면 나눌 경계다
+    def name_bundles(self, name: str) -> list[tuple[str, list[str]]]:
+        got: dict[str, set[str]] = {}
+        for e in self.graph.edges:
+            if e.dst == name and e.src != name and not e.src.startswith(name + ".") and e.names:
+                got.setdefault(e.src, set()).update(e.names)
+        return [(src, sorted(ns)) for src, ns in sorted(got.items())]
+
     def lines(self) -> list[str]:
         out: list[str] = []
         found = [(n, b, via) for n in sorted(self.graph.modules) for b, via in self.bypasses(n)]
@@ -136,9 +160,21 @@ class Reviewer:
             out.extend(f"  {n}/{f}: 클래스 {k}개" for n, f, k in crowded)
         leaks = self.leaks()
         if leaks:
-            out.append("숨은 타입 노출: 중첩 모듈의 공개 시그니처가 표면에 없는 타입을 쓴다. 맨 위 층으로 올리거나, 맨 위 층 모듈에서 꺼내 주거나(타입 별칭, Rust 트레이트는 pub use), 중첩 모듈 밖으로 뺀다")
+            out.append("숨은 타입 노출: 중첩 모듈의 공개 시그니처가 표면에 없는 타입을 쓴다. "
+                       "바깥이 구현하는 인터페이스나 여러 모듈이 함께 쓰는 자료형은 중첩 모듈 밖 낮은 층으로 빼고, "
+                       "안쪽 맨 위 층만 쓰는 타입은 맨 위 층으로 올린다. 그래도 남으면 아래 이름 묶음을 경계로 나눈다")
             out.extend(f"  {n}: {h} ({src}) <- {', '.join(users)}" for n, h, src, users in leaks)
-        out.append(f"점검 대상 {len(found) + len(orphans) + len(crowded) + len(leaks)}건")
+        reexported = [(n, ns) for n in sorted(self.graph.modules) if (ns := self.reexports(n))]
+        if reexported:
+            out.append("꺼내 주기: 맨 위 층 모듈이 아래 층 이름을 다시 내보낸다. 새로 쓰지 않는 방식이다. 아래 이름 묶음을 경계로 나눌지 확인")
+            out.extend(f"  {n}: {len(ns)}개 ({', '.join(ns)})" for n, ns in reexported)
+        bundles = [(n, b) for n in sorted({n for n, _, _, _ in leaks} | {n for n, _ in reexported}) if (b := self.name_bundles(n))]
+        if bundles:
+            out.append("바깥 모듈마다 가져가는 이름: 묶음이 서로 다르면 그 묶음이 나눌 경계다")
+            for n, b in bundles:
+                out.append(f"  {n}")
+                out.extend(f"    {src}: {', '.join(ns)}" for src, ns in b)
+        out.append(f"점검 대상 {len(found) + len(orphans) + len(crowded) + len(leaks) + len(reexported)}건")
         return out
 
     # ---- 쓰임 수집 ----

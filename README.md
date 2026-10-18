@@ -67,7 +67,7 @@ is checked and violations come back as errors.
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
 | `lnt map [--json]` | Modules, layers, dependencies at a glance. `--json` emits modules, edges, violations and orphans for tools that draw the map, one map per package under `src/` |
 | `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |
-| `lnt review` | Things worth a look, not violations: bypassing dependencies, modules nothing uses, files with more than one class, nested modules leaking hidden types. Always exit 0 |
+| `lnt review` | Things worth a look, not violations: bypassing dependencies, modules nothing uses, files with more than one class, nested modules that leak hidden types or re-export lower-layer names (shown with the names each outside module imports). Always exit 0 |
 | `lnt doc` | Generate the module map (`for-agent-layerinfo.md`) and every `__init__.py`, the package root included (module, layer and package surfaces) |
 | `lnt doc --check` | Exit 1 if docs drifted from code |
 | `lnt move MODULE lK` | Relocate a module and rewrite imports, tests mirror, layer `__init__`, docs |

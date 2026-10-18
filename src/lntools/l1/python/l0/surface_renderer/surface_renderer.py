@@ -5,7 +5,7 @@ MODULE_TEMPLATE = '''# 모듈 표면. lnt doc 이 생성한다
 '''
 
 LAZY_TEMPLATE = '''import importlib
-
+{type_block}
 # {title}. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {{
 {entries}
@@ -44,7 +44,14 @@ class SurfaceRenderer:
         imports = "".join(f"from .{rel} import {', '.join(ns)}\n" for rel, ns in sorted(by_file.items()))
         return MODULE_TEMPLATE.format(imports=imports + "\n" if imports else "\n", names=", ".join(f'"{n}"' for n in sorted(surface)))
 
+    # 타입 검사기는 __getattr__ 로 내보낸 이름을 Any 로 본다. TYPE_CHECKING 안의 X as X 재노출로 실제 타입을 보게 한다.
+    # 실행 중에는 읽지 않으므로 지연 로드는 그대로다
     @staticmethod
     def _lazy(title: str, surface: dict[str, str]) -> str:
         entries = "\n".join(f'    "{n}": "{rel}",' for n, rel in sorted(surface.items()))
-        return LAZY_TEMPLATE.format(title=title, entries=entries)
+        by_file: dict[str, list[str]] = {}
+        for n, rel in sorted(surface.items()):
+            by_file.setdefault(rel, []).append(n)
+        lines = [f"    from .{rel} import {', '.join(f'{n} as {n}' for n in ns)}" for rel, ns in sorted(by_file.items())]
+        type_block = "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n" + "\n".join(lines) + "\n" if lines else ""
+        return LAZY_TEMPLATE.format(type_block=type_block, title=title, entries=entries)
