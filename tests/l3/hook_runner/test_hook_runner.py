@@ -86,7 +86,7 @@ def test_context_reports_missing_responsibility(sample: Path, layout: ProjectLay
     DocGenerator(layout, graph, LANG).write_all()
     HookRunner(_payload(sample / "src/shop/l1/order/order.py"), sample, lambda _: LANG).post_edit()
     ctx = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
-    assert "책임 한 줄 필요:" in ctx and "무엇을 맡는지" in ctx
+    assert "책임 한 줄 필요:" in ctx and "나타내는 자료형" in ctx
 
 
 # 문법 오류는 위반처럼 exit 2 로 알린다

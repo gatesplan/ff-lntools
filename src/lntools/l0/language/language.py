@@ -88,6 +88,11 @@ class Language(ABC):
     def rewrite_imports(self, file: Path, package_root: Path, module_dir: Path,
                         old_name: str, new_name: str, exports: set[str]) -> bool: ...
 
+    # 파일 안에서 자기 패키지를 절대 경로로 가리키는 import 를 파일 위치 기준 상대 경로로 고친다(C5). 반환: 고친 import 수
+    # 기계로 고칠 수 없는 꼴은 그대로 둔다. 경로 규칙이 없는 언어는 0
+    @abstractmethod
+    def fix_absolute_imports(self, file: Path, package_root: Path) -> int: ...
+
     # lnt init 이 프로젝트 루트에 둘 언어 설정 파일. 파일 이름 -> 들어 있어야 할 줄들
     @abstractmethod
     def setup_files(self) -> dict[str, list[str]]: ...

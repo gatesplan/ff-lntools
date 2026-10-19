@@ -51,10 +51,10 @@ def test_responsibility_from_layerinfo(layout: ProjectLayout, graph: Graph):
     docs = DocGenerator(layout, graph, LANG)
     docs.write_all()
     p = docs.layerinfo_path("")
-    p.write_text(p.read_text(encoding="utf-8").replace("- order: [설명 필요]", "- order: 주문 상태를 맡는다"), encoding="utf-8")
+    p.write_text(p.read_text(encoding="utf-8").replace("- order: [설명 필요]", "- order: 주문 하나의 상태를 나타내는 자료형"), encoding="utf-8")
     docs.layerinfo_path("l3.portfolio").write_text("# 손글씨\n\n## l1\n- store: 포트폴리오를 보관한다\n", encoding="utf-8")
     d = _data(layout)
-    assert _module(d, "l1.order")["responsibility"] == "주문 상태를 맡는다"
+    assert _module(d, "l1.order")["responsibility"] == "주문 하나의 상태를 나타내는 자료형"
     assert _module(d, "l1.pair")["responsibility"] is None
     assert _module(d, "l3.portfolio.l1.store")["responsibility"] == "포트폴리오를 보관한다"
 

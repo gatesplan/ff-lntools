@@ -106,6 +106,10 @@ class RustLanguage(Language):
                         old_name: str, new_name: str, exports: set[str]) -> bool:
         return UseRewriter(package_root).rewrite(file, module_dir, old_name, new_name, exports)
 
+    # 경로 규칙(C5)을 아직 정하지 않아 고칠 것이 없다
+    def fix_absolute_imports(self, file: Path, package_root: Path) -> int:
+        return 0
+
     # 층 폴더의 모듈 폴더는 pub(crate) 라서 order/order.rs 의 같은 이름 경고(module_inception)를 이 설정으로 끈다
     def setup_files(self) -> dict[str, list[str]]:
         return {"clippy.toml": ["allow-private-module-inception = true"]}

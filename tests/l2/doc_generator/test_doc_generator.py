@@ -135,8 +135,8 @@ def test_need_desc_notice_with_rule(layout: ProjectLayout, graph: Graph):
     docs = DocGenerator(layout, graph, LANG)
     docs.write_all()
     root = [n for n in docs.notices if n.startswith("책임 한 줄 필요") and "src/shop/for-agent-layerinfo.md" in n]
-    assert len(root) == 1 and "order" in root[0] and "무엇을 맡는지" in root[0]
+    assert len(root) == 1 and "order" in root[0] and "나타내는 자료형" in root[0]
     p = docs.layerinfo_path("")
-    p.write_text(p.read_text(encoding="utf-8").replace("- order: [설명 필요]", "- order: 주문 상태를 맡는다"), encoding="utf-8")
+    p.write_text(p.read_text(encoding="utf-8").replace("- order: [설명 필요]", "- order: 주문 하나의 상태를 나타내는 자료형"), encoding="utf-8")
     names = docs.need_desc_notices({""})[0].split(": ", 1)[1].split(" (")[0].split(", ")
     assert "order" not in names and "pair" in names

@@ -21,7 +21,7 @@ HINTS = {
     "C4": "C4 풀이: 순환의 원인이 함께 쓰는 부분이면 그 부분을 새 모듈로 떼어 낸다. 순환하는 모듈이 1:1 로 늘 함께 바뀌면 한 모듈로 합친다. "
           "아니면 의존성 역전으로 한쪽 방향을 끊는다 (C1 풀이 2~4)",
     "C5": "C5 풀이: 패키지 안 import 는 상대 경로로 쓴다 (src/pkg/l2/report/report.py 에서 from ...l1.order import Order). "
-          "절대 경로는 패키지가 다른 프로젝트에 중첩 모듈로 들어가면 깨진다",
+          "절대 경로는 패키지가 다른 프로젝트에 중첩 모듈로 들어가면 깨진다. lnt check --fix --file <파일> 이 그 파일이 든 모듈의 from 꼴 절대 import 를 고친다",
     "C7": "C7 풀이: 파일을 층 폴더 아래 모듈 폴더로 옮기고 lnt doc 으로 표면을 만든다. 예: l1/stray.py 는 l1/stray/stray.py. "
           "층이 맞지 않으면 lnt check 의 C3 메시지대로 lnt move 한다. "
           "모듈 폴더 밖에 둘 수 있는 것은 표면 파일(__init__.py)과, 패키지 루트나 중첩 모듈 폴더 바로 아래의 __main__.py 뿐이다",
@@ -91,6 +91,9 @@ class PythonLanguage(Language):
     def rewrite_imports(self, file: Path, package_root: Path, module_dir: Path,
                         old_name: str, new_name: str, exports: set[str]) -> bool:
         return ImportRewriter(package_root).rewrite(file, module_dir, old_name, new_name, exports)
+
+    def fix_absolute_imports(self, file: Path, package_root: Path) -> int:
+        return ImportRewriter(package_root).relativize(file)
 
     def setup_files(self) -> dict[str, list[str]]:
         return {}

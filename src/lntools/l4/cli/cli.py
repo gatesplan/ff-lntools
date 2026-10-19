@@ -55,6 +55,7 @@ class Cli:
 
         c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환, 덧붙이기 위치, 모듈 밖 소스 검사. 문법 오류 파일도 알린다")
         c.add_argument("--file", help="이 파일을 포함하는 모듈의 위반만. 모듈 밖 파일이면 모듈 밖 소스 위반만")
+        c.add_argument("--fix", action="store_true", help="기계로 고칠 수 있는 위반(C5 절대 import)을 고친 뒤 검사")
 
         b = sub.add_parser("blast", help="모듈 변경 시 영향 범위")
         b.add_argument("module")
@@ -70,7 +71,8 @@ class Cli:
         s = sub.add_parser("sig", help="공개 시그니처 조회. 문서로 두지 않고 그 자리에서 계산")
         s.add_argument("targets", nargs="*", help="층(l1), 모듈(l1.order), 모듈 이름(order). 없으면 전체")
 
-        sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출, 꺼내 주기. 위반이 아니라 exit 0")
+        sub.add_parser("review", help="점검 대상: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출, 꺼내 주기, "
+                       "import 없이 함께 자주 바뀌는 모듈 쌍, 결과 없는 동사로 끝나는 책임 줄. 위반이 아니라 exit 0")
 
         mv = sub.add_parser("move", help="모듈을 다른 층으로 이동. import, tests 미러, 표면 파일, 문서 갱신")
         mv.add_argument("module")
@@ -129,8 +131,11 @@ class Cli:
                     return 1
                 packs = [p for p in packs if p[0].package_root == own.package_root] or [self.load(own)]
             total, count, codes = 0, 0, {}
-            for layout, lang, graph in packs:
+            for pack in packs:
+                layout, lang, graph = pack
                 only = ({x.name for x in graph.modules_of(Path(args.file))} or {""}) if args.file else None
+                if args.fix:
+                    layout, lang, graph = self.fix(pack, only)
                 violations = Checker(graph, Surface(layout, graph.modules, lang)).run(only)
                 for v in violations:
                     print(v.format(layout.project_root))
@@ -171,7 +176,7 @@ class Cli:
         if args.cmd == "review":
             for layout, lang, graph in packs:
                 head(layout)
-                for line in Reviewer(layout, graph, lang).lines():
+                for line in Reviewer(layout, graph, lang, DocGenerator(layout, graph, lang).responsibilities()).lines():
                     print(line)
             return 0
 
@@ -250,6 +255,18 @@ class Cli:
         lang = cls.language_of(layout)
         modules, edges = Scanner(layout, lang).scan()
         return layout, lang, Graph(modules, edges)
+
+    # check --fix: 기계로 고칠 수 있는 위반(C5 절대 import)을 고친다. only 가 있으면 그 모듈의 파일만
+    # 고쳤으면 패키지를 다시 읽어 돌려준다
+    @classmethod
+    def fix(cls, pack: tuple[ProjectLayout, Language, Graph], only: set[str] | None) -> tuple[ProjectLayout, Language, Graph]:
+        layout, lang, graph = pack
+        files = sorted({f for m in graph.modules.values() if only is None or m.name in only for f, _, _ in m.absolute_imports})
+        n = sum(lang.fix_absolute_imports(f, layout.package_root) for f in files)
+        if not n:
+            return pack
+        print(f"C5 고침: {layout.package_name} 의 절대 import {n}개를 상대 경로로 바꿨다")
+        return cls.load(layout)
 
     # 모듈 하나를 받는 명령의 대상. '패키지/모듈' 이면 그 패키지, 아니면 그 이름의 모듈이 있는 패키지
     # 어디에도 없으면 첫 패키지(명령이 '모듈 없음' 을 알린다). 여러 패키지에 있으면 알릴 글

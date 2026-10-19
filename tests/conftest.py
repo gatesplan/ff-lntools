@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -32,3 +33,23 @@ def layout(sample: Path) -> ProjectLayout:
 def graph(layout: ProjectLayout) -> Graph:
     modules, edges = Scanner(layout, LANG).scan()
     return Graph(modules, edges)
+
+
+# git 이 필요한 시험. 사용자 git 설정(서명, 훅)과 떨어진 빈 설정으로 커밋한다. git 이 없으면 건너뛴다
+# 반환: git(폴더, 인자...) 를 실행하는 함수
+@pytest.fixture
+def git(tmp_path: Path, monkeypatch):
+    if shutil.which("git") is None:
+        pytest.skip("git 없음")
+    cfg = tmp_path / "gitconfig"
+    cfg.write_text("", encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(cfg))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for who in ("GIT_AUTHOR", "GIT_COMMITTER"):
+        monkeypatch.setenv(f"{who}_NAME", "lnt")
+        monkeypatch.setenv(f"{who}_EMAIL", "lnt@example.com")
+
+    def run(root: Path, *args: str) -> None:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True)
+
+    return run

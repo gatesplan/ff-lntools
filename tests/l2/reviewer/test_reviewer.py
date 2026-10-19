@@ -145,3 +145,34 @@ def test_bypass_vocabulary_is_resolved_not_spelled(layout: ProjectLayout):
 def test_bypass_skipped_when_via_defaults_to_the_type(layout: ProjectLayout):
     _ledger_and_audit(layout, "    def add(self, order=Order) -> None:\n        pass\n")
     assert _review(layout).bypasses("l3.audit") == []
+
+
+def _change(git, root: Path, rels: list[str], times: int) -> None:
+    for i in range(times):
+        for rel in rels:
+            p = root / rel
+            p.write_text(p.read_text(encoding="utf-8") + f"# {i}\n", encoding="utf-8")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", f"change {i}")
+
+
+# import 없이 세 번 함께 바뀐 wallet 과 email_notifier 는 올리고, report 가 import 하는 order 와의 쌍은 뺀다
+def test_co_changes_without_import(sample: Path, layout: ProjectLayout, git):
+    git(sample, "init", "-q")
+    git(sample, "add", "-A")
+    git(sample, "commit", "-q", "-m", "init")
+    _change(git, sample, ["src/shop/l1/wallet/wallet.py", "src/shop/l1/email_notifier/email_notifier.py"], 3)
+    _change(git, sample, ["src/shop/l2/report/report.py", "src/shop/l1/order/order.py"], 3)
+    r = _review(layout)
+    assert r.co_changes() == [("l1.email_notifier", "l1.wallet", 3, 1.0)]
+    assert "  l1.email_notifier, l1.wallet: 함께 바뀐 커밋 3번, 한쪽이 바뀐 커밋의 100%" in r.lines()
+
+
+# 책임 줄 규약 2번의 동사로 끝나는 줄만 올린다
+def test_vague_responsibility_lines(layout: ProjectLayout):
+    modules, edges = Scanner(layout, LANG).scan()
+    lines = {"l1.order": "주문 상태를 맡는다", "l1.pair": "두 토큰의 거래 쌍을 나타내는 자료형",
+             "l2.report": "보고서 요청에 답한다."}
+    r = Reviewer(layout, Graph(modules, edges), LANG, lines)
+    assert r.vague_lines() == [("l1.order", "주문 상태를 맡는다"), ("l2.report", "보고서 요청에 답한다.")]
+    assert "  l1.order: 주문 상태를 맡는다" in r.lines()

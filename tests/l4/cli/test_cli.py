@@ -143,3 +143,12 @@ def test_init_rust_project(tmp_path: Path, capsys):
     assert Cli(["--root", str(tmp_path), "init"]).run() == 0
     assert (tmp_path / ".claude" / "for-agent-codingprotocol-ln-structure-rust.md").is_file()
     assert "allow-private-module-inception = true" in (tmp_path / "clippy.toml").read_text(encoding="utf-8")
+
+
+# check --fix 는 C5 절대 import 를 상대 경로로 고친 뒤 남은 위반만 보인다
+def test_check_fix_rewrites_absolute_imports(sample: Path, capsys):
+    f = sample / "src/shop/l3/intruder/intruder.py"
+    assert Cli(["--root", str(sample), "check", "--fix"]).run() == 1
+    out = capsys.readouterr().out
+    assert "C5 고침: shop 의 절대 import 1개를 상대 경로로 바꿨다" in out and "[C5]" not in out
+    assert f.read_text(encoding="utf-8").startswith("from ..portfolio.l0.tick_snapshot import TickSnapshot\n")

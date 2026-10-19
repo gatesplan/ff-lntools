@@ -1,15 +1,22 @@
+from ...l0.co_change import CoChange
 from ...l0.language import Language
 from ...l0.project_layout import ProjectLayout
 from ...l1.graph import Graph
 from ...l1.surface import Surface
 
 
-# lnt review. 위반은 아니지만 한 번 볼 만한 구조: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출, 꺼내 주기
+# lnt review. 위반은 아니지만 한 번 볼 만한 구조: 우회 의존, 아무도 쓰지 않는 모듈, 클래스가 여럿인 파일, 숨은 타입 노출, 꺼내 주기,
+# import 없이 함께 자주 바뀌는 모듈 쌍(git 이력), 결과 없이 동작만 말하는 책임 줄
 class Reviewer:
-    def __init__(self, layout: ProjectLayout, graph: Graph, language: Language):
+    # 책임 줄 규약 2번이 쓰지 않는 동사. 결과가 없어 이 줄만 보고 새 기능이 들어갈지 판단할 수 없다
+    VAGUE_VERBS = ("분석한다", "처리한다", "다룬다", "짚는다", "맡는다", "관리한다", "지원한다", "답한다")
+
+    # responsibilities: 모듈 이름 -> 책임 한 줄 (layerinfo 에 쓰인 것)
+    def __init__(self, layout: ProjectLayout, graph: Graph, language: Language, responsibilities: dict[str, str] | None = None):
         self.layout = layout
         self.graph = graph
         self.language = language
+        self.responsibilities = responsibilities or {}
         self.pkg = layout.package_name
         self.surface = Surface(layout, graph.modules, language)
         self._reach_cache: dict[str, set[str]] = {}
@@ -144,6 +151,23 @@ class Reviewer:
                 got.setdefault(e.src, set()).update(e.names)
         return [(src, sorted(ns)) for src, ns in sorted(got.items())]
 
+    # import 없이 자주 함께 바뀐 모듈 쌍. 두 모듈이나 그 모듈을 품은 중첩 모듈 사이에 import 가 있으면 뺀다
+    # 반환: [(모듈 a, 모듈 b, 함께 바뀐 커밋 수, 비율)]
+    def co_changes(self) -> list[tuple[str, str, int, float]]:
+        g = self.graph
+        linked = {(e.src, e.dst) for e in g.edges if e.dst}
+
+        def chain(n: str) -> list[str]:
+            return [x for x in g.modules if n == x or n.startswith(x + ".")]
+
+        simple = {n: m.path for n, m in g.modules.items() if not m.is_nested}
+        return [(a, b, k, r) for a, b, k, r in CoChange(self.layout.package_root, simple).pairs()
+                if not any((x, y) in linked or (y, x) in linked for x in chain(a) for y in chain(b))]
+
+    # 결과 없이 동작만 말하는 동사로 끝나는 책임 줄. [(모듈, 책임 줄)]
+    def vague_lines(self) -> list[tuple[str, str]]:
+        return [(n, d) for n, d in sorted(self.responsibilities.items()) if d.rstrip(". ").endswith(self.VAGUE_VERBS)]
+
     def lines(self) -> list[str]:
         out: list[str] = []
         found = [(n, b, via) for n in sorted(self.graph.modules) for b, via in self.bypasses(n)]
@@ -174,7 +198,16 @@ class Reviewer:
             for n, b in bundles:
                 out.append(f"  {n}")
                 out.extend(f"    {src}: {', '.join(ns)}" for src, ns in b)
-        out.append(f"점검 대상 {len(found) + len(orphans) + len(crowded) + len(leaks) + len(reexported)}건")
+        pairs = self.co_changes()
+        if pairs:
+            out.append("함께 자주 바뀌는 모듈 쌍: import 가 없는데 함께 바뀐다. 같은 이유로 바뀌는지 확인하고, 같은 규칙이 두 곳에 있으면 한 모듈로 모은다")
+            out.extend(f"  {a}, {b}: 함께 바뀐 커밋 {k}번, 한쪽이 바뀐 커밋의 {round(r * 100)}%" for a, b, k, r in pairs)
+        vague = self.vague_lines()
+        if vague:
+            out.append("결과 없이 동작만 말하는 책임 줄: '<입력>을 받아 <출력>을 돌려준다' 꼴로 다시 쓸지 사람에게 올린다")
+            out.extend(f"  {n}: {d}" for n, d in vague)
+        count = len(found) + len(orphans) + len(crowded) + len(leaks) + len(reexported) + len(pairs) + len(vague)
+        out.append(f"점검 대상 {count}건")
         return out
 
     # ---- 쓰임 수집 ----

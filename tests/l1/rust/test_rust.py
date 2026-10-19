@@ -62,12 +62,13 @@ def test_protocol_doc_is_packaged():
     assert (resources.files("lntools") / "protocol" / LANG.protocol_doc).is_file()
 
 
-# 출력은 ASCII 와 한글만 (훅 경로 규칙). C5 는 Rust 에서 검사하지 않아 풀이가 없다
+# 출력은 ASCII 와 한글만 (훅 경로 규칙). C5 는 Rust 에서 검사하지 않아 풀이가 없고, 고칠 것도 없다
 def test_hints():
-    hints = LANG.hints({"E", "C1", "C2", "C3", "C4", "C5", "C6"})
-    assert [h.split(" ", 1)[0] for h in hints] == ["E", "C1", "C2", "C3", "C4", "C6"]
+    hints = LANG.hints({"E", "C1", "C2", "C3", "C4", "C5", "C6", "C7"})
+    assert [h.split(" ", 1)[0] for h in hints] == ["E", "C1", "C2", "C3", "C4", "C6", "C7"]
     for h in hints:
         assert all(ord(ch) < 128 or "가" <= ch <= "힣" for ch in h)
+    assert LANG.fix_absolute_imports(Path("x.rs"), Path(".")) == 0
 
 
 def test_setup_files_turn_off_private_module_inception():

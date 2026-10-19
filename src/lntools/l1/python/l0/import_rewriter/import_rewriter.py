@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 # 모듈 하나가 다른 층으로 옮겨 갈 때 Python 파일의 import 를 고친다. 다시 쓰는 import 는 상대 경로
+# 자기 패키지를 절대 경로로 가리키는 import 를 상대 경로로 바꾸는 일(C5 고침)도 한다
 class ImportRewriter:
     def __init__(self, package_root: Path):
         self.package_root = package_root
@@ -94,6 +95,38 @@ class ImportRewriter:
             lines[start - 1:end] = [body]
         f.write_text("".join(lines), encoding="utf-8")
         return True
+
+    # 자기 패키지를 절대 경로로 가리키는 from import 를 파일 위치 기준 상대 경로로 고친다(C5). 반환: 고친 import 수
+    # 경로 글자만 바꾸므로 가져오는 이름, 괄호, 줄 끝 주석, 줄바꿈 문자는 그대로다
+    # import 패키지.x 꼴은 코드 안의 이름까지 바꿔야 해서 그대로 둔다
+    def relativize(self, f: Path) -> int:
+        with open(f, encoding="utf-8", newline="") as fh:
+            src = fh.read()
+        try:
+            tree = ast.parse(src, filename=str(f))
+        except SyntaxError:
+            return 0
+        file_pkg = self._package_of(f)
+        if file_pkg is None:
+            return 0
+        # 줄 번호는 ast 와 같게 줄바꿈 문자로만 센다 (splitlines 는 폼 피드에서도 끊는다)
+        lines = re.split(r"(?<=\n)", src)
+        fixed = 0
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.ImportFrom) and node.level == 0 and node.module
+                    and (node.module == self.pkg or node.module.startswith(self.pkg + "."))):
+                continue
+            level, module = self._relative(file_pkg, node.module)
+            rel = "." * level + (module or "")
+            head = re.compile(rf"^(\s*from\s+){re.escape(node.module)}(?![\w.])")
+            new, n = head.subn(lambda m: m.group(1) + rel, lines[node.lineno - 1], count=1)
+            if n:
+                lines[node.lineno - 1] = new
+                fixed += 1
+        if fixed:
+            with open(f, "w", encoding="utf-8", newline="") as fh:
+                fh.write("".join(lines))
+        return fixed
 
     # file_pkg 패키지의 파일에서 쓸 import 문. 패키지 밖 파일(tests)은 상대 import 를 쓸 수 없어 절대 경로
     @classmethod

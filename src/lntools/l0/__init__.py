@@ -2,6 +2,7 @@ import importlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .co_change import CoChange as CoChange
     from .edge import Edge as Edge
     from .initializer import Initializer as Initializer
     from .language import Language as Language, RawImpl as RawImpl, RawImport as RawImport, RawReexport as RawReexport, RawTypeRef as RawTypeRef
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
 
 # 층 표면. 이름 -> 모듈 경로. 지연 로드. lnt doc 이 생성한다
 _EXPORTS = {
+    "CoChange": "co_change",
     "Edge": "edge",
     "Initializer": "initializer",
     "Language": "language",

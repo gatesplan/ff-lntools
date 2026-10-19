@@ -23,7 +23,7 @@ def test_no_hints_without_violations():
 
 # 출력은 ASCII 와 한글만 (훅 경로 규칙)
 def test_hint_text_is_ascii_or_hangul():
-    for h in LANG.hints({"E", "C1", "C2", "C3", "C4", "C5"}):
+    for h in LANG.hints({"E", "C1", "C2", "C3", "C4", "C5", "C7"}):
         assert all(ord(ch) < 128 or "가" <= ch <= "힣" for ch in h)
 
 
@@ -58,3 +58,23 @@ def test_outside_uses_from_scripts_and_pyproject(tmp_path: Path):
     uses = LANG.outside_uses(tmp_path, pkg)
     assert ("shop.l1.order", []) in uses and ("shop.l2", ["Deep"]) in uses and ("shop.l4.app", []) in uses
     assert not any(d.startswith("shop.l3") for d, _ in uses)
+
+
+# C5 고침: 자기 패키지를 가리키는 절대 from import 를 파일 위치 기준 상대 경로로. 경로 글자만 바꿔 주석, 괄호, 들여쓰기, CRLF 는 그대로
+# import 패키지.x 꼴은 그대로 둔다
+def test_fix_absolute_imports_keeps_the_rest(tmp_path: Path):
+    root = tmp_path / "src" / "shop"
+    f = root / "l2" / "report" / "report.py"
+    f.parent.mkdir(parents=True)
+    f.write_bytes(("from shop.l1.order import Order  # noqa\r\n"
+                   "from shop.l1 import (\r\n    Pair,\r\n)\r\n"
+                   "import shop.l0.candle\r\n"
+                   "from shop import Portfolio\r\n"
+                   "def f():\r\n    from shop.l2.report.part import Part\r\n").encode("utf-8"))
+    assert LANG.fix_absolute_imports(f, root) == 4
+    assert f.read_bytes().decode("utf-8") == ("from ...l1.order import Order  # noqa\r\n"
+                                              "from ...l1 import (\r\n    Pair,\r\n)\r\n"
+                                              "import shop.l0.candle\r\n"
+                                              "from ... import Portfolio\r\n"
+                                              "def f():\r\n    from .part import Part\r\n")
+    assert LANG.fix_absolute_imports(f, root) == 0
