@@ -12,6 +12,8 @@
 
 - 모듈이 공개하는 이름은 `pub` 인 struct, enum, trait, type 별칭(, union)뿐이다
 - 자유 함수는 타입의 연관 함수(`impl Order { pub fn new() -> Self }`)로, 상수는 연관 상수(`pub const MAX: u32`)로 둔다
+- 공개 이름을 타입으로 한정하는 까닭: 표면이 한 가지 꼴이 되어 생성과 검사가 단순해지고, 함수가 어느 타입의 일인지 이름에 드러난다.
+  모듈 안에서만 쓰는 함수는 자유 함수로 두어도 된다
 - `pub(crate)` 항목은 표면에 들어가지 않는다. 모듈 밖에서 쓸 타입은 `pub` 으로 쓴다
 - 꺼내 주기(맨 위 층 모듈이 `pub use` 나 `pub type` 으로 아래 층 이름을 다시 내보내기)는 새로 쓰지 않는다. 숨은 타입은 공통 문서 '표면' 절의 방법으로 푼다.
   이미 쓴 꺼내 주기는 lnt 가 계속 공개 이름으로 센다(아래 '중첩 모듈 mod.rs'). 그 밖의 `pub use` 는 공개 이름이 아니다
@@ -336,6 +338,7 @@ project/
 - 위치: `src/ln/modulename/`
 - 메인 파일: `modulename.rs` (또는 중첩 Ln)
 - 표면: `mod.rs` (패키지는 `src/lib.rs`)
+- 모듈 폴더 밖에 둘 수 있는 소스: 표면 파일(`mod.rs`, `lib.rs`)과 Cargo 의 다른 대상(`main.rs`, `bin/`, `tests/`, `examples/`, `benches/`, `build.rs`). 그 밖은 C7
 
 ### 고아 판정에서 패키지 밖 쓰임으로 보는 것
 - `src/main.rs`, `src/bin/`, `examples/`, `benches/` 의 `use 크레이트이름::...` (tests 제외)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ff-lntools"
-version = "0.9.0"
+version = "0.10.0"
 description = "ln-structure checker, blast radius, doc generator and Claude Code hooks for Python and Rust"
 readme = "README.md"
 license = {text = "MIT"}

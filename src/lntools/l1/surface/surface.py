@@ -95,14 +95,22 @@ class Surface:
     def root_file(self) -> Path:
         return self.language.surface_path(self.layout.package_root, "root")
 
+    # 패키지 루트와 중첩 모듈 안의 층 폴더. 모듈이 없는 층 폴더도 넣는다
+    def layer_dirs(self) -> list[Path]:
+        scopes = [self.layout.package_root] + [m.path for m in self.modules.values() if m.is_nested]
+        return [c for d in scopes for c in sorted(d.iterdir()) if c.is_dir() and ProjectLayout.LAYER_RE.match(c.name)]
+
+    # 표면 파일 경로 전체. 패키지 루트, 층, 모듈
+    def paths(self) -> set[Path]:
+        return ({self.root_file()} | {self.language.surface_path(d, "layer") for d in self.layer_dirs()}
+                | {self.module_file(n) for n in self.modules})
+
     # 만들어야 할 표면 파일 경로와 내용. 패키지 루트 포함. 모듈이 없는 층 폴더는 빈 층 표면
     def render(self) -> dict[Path, str]:
         lang = self.language
         out: dict[Path, str] = {self.root_file(): lang.render_surface(self.layout.package_root, "root", self.of_root())}
-        for d in [self.layout.package_root] + [m.path for m in self.modules.values() if m.is_nested]:
-            for c in sorted(d.iterdir()):
-                if c.is_dir() and ProjectLayout.LAYER_RE.match(c.name):
-                    out[lang.surface_path(c, "layer")] = lang.render_surface(c, "layer", {})
+        for c in self.layer_dirs():
+            out[lang.surface_path(c, "layer")] = lang.render_surface(c, "layer", {})
         for ln in self.layer_names():
             out[self.layer_file(ln)] = lang.render_surface(self.layer_dir(ln), "layer", self.of_layer(ln)[0])
         for name, m in sorted(self.modules.items()):

@@ -66,6 +66,12 @@ class Language(ABC):
     @abstractmethod
     def outside_uses(self, project_root: Path, package_root: Path) -> list[tuple[str, list[str]]]: ...
 
+    # 모듈 폴더 밖에 있어도 되는 파일이나 폴더인지. 표면 파일은 따로 센다
+    # 진입 스크립트(Python 의 __main__.py), 패키지 폴더 안에 놓인 다른 빌드 대상과 빌드 결과(Rust 의 main.rs, bin/, tests/, target/)
+    # scope_dir: path 를 품은 가장 안쪽 중첩 모듈 폴더. 없으면 패키지 루트
+    @abstractmethod
+    def allowed_outside_modules(self, path: Path, package_root: Path, scope_dir: Path) -> bool: ...
+
     # ---- 쓰기 ----
 
     # 폴더의 표면 파일 경로
@@ -88,6 +94,6 @@ class Language(ABC):
 
     # ---- 안내 ----
 
-    # 위반 종류마다 해결 방법 한 줄. E, C1~C6 순서
+    # 위반 종류마다 해결 방법 한 줄. E, C1~C7 순서
     @abstractmethod
     def hints(self, codes: set[str]) -> list[str]: ...

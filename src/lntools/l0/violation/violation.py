@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-# 규칙 위반 하나. code는 C1(방향) C2(표면) C3(층 일치) C4(순환) C5(상대 경로) C6(덧붙이기 위치), E(파싱 실패). 풀이는 언어가 맡는다
+# 규칙 위반 하나. code는 C1(방향) C2(표면) C3(층 일치) C4(순환) C5(상대 경로) C6(덧붙이기 위치) C7(모듈 밖 소스), E(파싱 실패)
+# 풀이는 언어가 맡는다. module 이 "" 이면 어느 모듈에도 속하지 않은 패키지의 위반이다
 @dataclass
 class Violation:
     code: str
@@ -19,4 +20,5 @@ class Violation:
             except ValueError:
                 pass
         loc = f"{p.as_posix()}:{self.line}" if self.line > 0 else p.as_posix()
-        return f"[{self.code}] {self.module} ({loc}) {self.message}"
+        who = f"{self.module} " if self.module else ""
+        return f"[{self.code}] {who}({loc}) {self.message}"

@@ -32,7 +32,7 @@ tests/
   l1/order/test_order.py    # example. Test placement is not an ln rule
 ```
 
-Six rules. C6 applies to Rust only.
+Seven rules. C6 applies to Rust only.
 
 | Code | Rule |
 |---|---|
@@ -42,6 +42,7 @@ Six rules. C6 applies to Rust only.
 | C4 | No cycles between modules |
 | C5 | Imports inside the package are **relative** (`from ...l1.order import Order`), so the package still works when nested inside another project (not checked for Rust yet) |
 | C6 | Rust: an `impl` lives in the module of its type or trait. Attached elsewhere, its code runs without any import showing it |
+| C7 | Every source file lives in a module folder. Only surface files and entry scripts (`__main__.py`; for Rust, Cargo's other targets such as `main.rs`, `bin/`, `tests/`) sit outside. A file outside every module escapes all other checks |
 
 Why.
 
@@ -63,7 +64,7 @@ is checked and violations come back as errors.
 | Command | Role |
 |---|---|
 | `lnt init` | Install protocol docs, `CLAUDE.md` and Claude Code hooks into a project |
-| `lnt check` | C1-C5, plus files that fail to parse. Exit 1 on violation |
+| `lnt check` | C1-C7, plus files that fail to parse. Exit 1 on violation |
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
 | `lnt map [--json]` | Modules, layers, dependencies at a glance. `--json` emits modules, edges, violations and orphans for tools that draw the map, one map per package under `src/` |
 | `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |

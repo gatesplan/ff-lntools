@@ -53,8 +53,8 @@ class Cli:
         p.add_argument("--root", default=".", help="프로젝트 안의 아무 경로. 기본: 현재 디렉토리")
         sub = p.add_subparsers(dest="cmd", required=True)
 
-        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환, 덧붙이기 위치 검사. 문법 오류 파일도 알린다")
-        c.add_argument("--file", help="이 파일을 포함하는 모듈의 위반만")
+        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환, 덧붙이기 위치, 모듈 밖 소스 검사. 문법 오류 파일도 알린다")
+        c.add_argument("--file", help="이 파일을 포함하는 모듈의 위반만. 모듈 밖 파일이면 모듈 밖 소스 위반만")
 
         b = sub.add_parser("blast", help="모듈 변경 시 영향 범위")
         b.add_argument("module")
@@ -130,7 +130,7 @@ class Cli:
                 packs = [p for p in packs if p[0].package_root == own.package_root] or [self.load(own)]
             total, count, codes = 0, 0, {}
             for layout, lang, graph in packs:
-                only = {x.name for x in graph.modules_of(Path(args.file))} if args.file else None
+                only = ({x.name for x in graph.modules_of(Path(args.file))} or {""}) if args.file else None
                 violations = Checker(graph, Surface(layout, graph.modules, lang)).run(only)
                 for v in violations:
                     print(v.format(layout.project_root))

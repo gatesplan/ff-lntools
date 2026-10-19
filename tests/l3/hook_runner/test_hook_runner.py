@@ -96,3 +96,21 @@ def test_parse_error_exits_2(sample: Path, capsys):
     assert HookRunner(_payload(f), sample, lambda _: LANG).post_edit() == 2
     err = capsys.readouterr().err
     assert "[E] l1.order" in err and "E 풀이" in err
+
+
+# 모듈 폴더 밖에 새로 쓴 파일은 C7 로 막는다
+def test_loose_file_exits_2(sample: Path, capsys):
+    f = sample / "src/shop/l1/stray.py"
+    f.write_text("from ..l4.app import App\n", encoding="utf-8")
+    assert HookRunner(_payload(f), sample, lambda _: LANG).post_edit() == 2
+    err = capsys.readouterr().err
+    assert "[C7] (src/shop/l1/stray.py)" in err and "C7 풀이" in err
+
+
+# 표면 파일과 진입 스크립트를 고쳐도 모듈 밖 소스가 없으면 조용하다
+def test_surface_or_entry_edit_is_silent(sample: Path, capsys):
+    main = sample / "src/shop/__main__.py"
+    main.write_text("import sys\n", encoding="utf-8")
+    assert HookRunner(_payload(main), sample, lambda _: LANG).post_edit() == 0
+    assert HookRunner(_payload(sample / "src/shop/l1/__init__.py"), sample, lambda _: LANG).post_edit() == 0
+    assert capsys.readouterr() == ("", "")

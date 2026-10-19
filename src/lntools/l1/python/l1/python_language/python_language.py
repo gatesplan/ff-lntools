@@ -22,6 +22,9 @@ HINTS = {
           "아니면 의존성 역전으로 한쪽 방향을 끊는다 (C1 풀이 2~4)",
     "C5": "C5 풀이: 패키지 안 import 는 상대 경로로 쓴다 (src/pkg/l2/report/report.py 에서 from ...l1.order import Order). "
           "절대 경로는 패키지가 다른 프로젝트에 중첩 모듈로 들어가면 깨진다",
+    "C7": "C7 풀이: 파일을 층 폴더 아래 모듈 폴더로 옮기고 lnt doc 으로 표면을 만든다. 예: l1/stray.py 는 l1/stray/stray.py. "
+          "층이 맞지 않으면 lnt check 의 C3 메시지대로 lnt move 한다. "
+          "모듈 폴더 밖에 둘 수 있는 것은 표면 파일(__init__.py)과, 패키지 루트나 중첩 모듈 폴더 바로 아래의 __main__.py 뿐이다",
 }
 
 
@@ -74,6 +77,10 @@ class PythonLanguage(Language):
 
     def outside_uses(self, project_root: Path, package_root: Path) -> list[tuple[str, list[str]]]:
         return ImportReader(package_root).outside_uses(project_root)
+
+    # __main__.py 는 패키지 루트나 중첩 모듈 폴더 바로 아래의 진입 스크립트다 (python -m 으로 그 패키지를 실행한다)
+    def allowed_outside_modules(self, path: Path, package_root: Path, scope_dir: Path) -> bool:
+        return path.name == "__main__.py" and path.parent == scope_dir
 
     def surface_path(self, folder: Path, kind: str) -> Path:
         return SurfaceRenderer.path(folder)

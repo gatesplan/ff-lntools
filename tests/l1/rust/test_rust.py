@@ -126,6 +126,10 @@ MUTATIONS = {
                               "    fn on_tick(&mut self, p: &mut dyn OrderPlacer, c: &Candle) { (**self).on_tick(p, c) }\n}\n",
                               True, []),
     "테스트 안 덧붙이기는 보지 않는다": ("src/l2/engine/engine.rs", "#[cfg(test)]\nimpl crate::l0::candle::Candle {}\n", True, []),
+    "층 폴더에 바로 둔 파일": ("src/l1/stray.rs", "pub struct Stray;\n", False, [("C7", "")]),
+    "중첩 모듈 안 모듈 밖 파일": ("src/l1/book/helper.rs", "pub struct Helper;\n", False, [("C7", "l1.book")]),
+    "실행 파일은 모듈 밖에 둔다": ("src/bin/tool.rs", "fn main() {}\n", False, []),
+    "main.rs 는 모듈 밖에 둔다": ("src/main.rs", "fn main() {}\n", False, []),
 }
 
 
@@ -136,10 +140,33 @@ def test_mutation(tmp_path: Path, case: str):
     cargo = root / "Cargo.toml"
     cargo.write_text(cargo.read_text(encoding="utf-8") + 'serde = "1"\n', encoding="utf-8")
     p = root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text((p.read_text(encoding="utf-8") if append else "") + text, encoding="utf-8")
     layout, graph = _graph(root)
     found = sorted({(v.code, v.module) for v in Checker(graph, Surface(layout, graph.modules, LANG)).run()})
     assert found == sorted(expected)
+
+
+# 패키지 루트가 크레이트 폴더 자체인 꼴([lib] path = "lib.rs")이면 Cargo 의 다른 대상과 target/ 이 그 안에 놓인다.
+# 이것들은 C7 이 아니고, 그 밖의 모듈 밖 파일만 C7
+def test_crate_folder_as_package_root_keeps_cargo_targets(tmp_path: Path):
+    crate = tmp_path / "src" / "engine"
+    files = {
+        "Cargo.toml": '[package]\nname = "engine"\nversion = "0.1.0"\n\n[lib]\npath = "lib.rs"\n',
+        "lib.rs": "mod l0;\n", "l0/mod.rs": "pub(crate) mod money;\n",
+        "l0/money/mod.rs": "mod money;\npub use money::Money;\n", "l0/money/money.rs": "pub struct Money;\n",
+        "tests/common/mod.rs": "", "tests/golden.rs": "", "examples/demo.rs": "fn main() {}\n", "benches/b.rs": "",
+        "build.rs": "fn main() {}\n", "target/debug/build/x/out/gen.rs": "", "main.rs": "fn main() {}\n",
+        "stray.rs": "pub struct Stray;\n",
+    }
+    for rel, text in files.items():
+        p = crate / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    layout, graph = _graph(tmp_path)
+    assert layout.package_root.name == "engine"
+    c7 = [v.file.name for v in Checker(graph, Surface(layout, graph.modules, LANG)).run() if v.code == "C7"]
+    assert c7 == ["stray.rs"]
 
 
 # 여러 기능을 쓰는 크레이트(제네릭, 수명, const 제네릭, 연관 타입, async, let-else, let 체인, 매크로, thiserror,

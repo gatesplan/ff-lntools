@@ -24,6 +24,9 @@ HINTS = {
     "C6": "C6 풀이: impl 을 타입의 모듈 폴더로 옮긴다. 트레이트 구현은 타입이나 트레이트의 모듈에 둔다. "
           "위 층에서 확장이 필요하면 자기 모듈에 확장 트레이트(trait OrderExt 와 impl OrderExt for Order)를 만들거나 감싸는 타입을 둔다. "
           "선택 기능의 구현은 타입 정의에 #[cfg_attr(feature = \"...\", derive(...))] 로 붙인다",
+    "C7": "C7 풀이: 파일을 층 폴더 아래 모듈 폴더로 옮기고 lnt doc 으로 mod 선언을 다시 만든다. 예: l1/stray.rs 는 l1/stray/stray.rs. "
+          "층이 맞지 않으면 lnt check 의 C3 메시지대로 lnt move 한다. "
+          "모듈 폴더 밖에 둘 수 있는 것은 표면 파일(lib.rs, mod.rs)과 Cargo 의 다른 대상(main.rs, bin/, tests/, examples/, benches/, build.rs)뿐이다",
 }
 
 
@@ -81,6 +84,16 @@ class RustLanguage(Language):
 
     def outside_uses(self, project_root: Path, package_root: Path) -> list[tuple[str, list[str]]]:
         return self._reader(package_root).outside_uses(project_root)
+
+    # 크레이트에서 라이브러리 밖인 것: 실행 파일(main.rs, bin/), 통합 테스트, 예제, 벤치, 빌드 스크립트, 빌드 결과(target/)
+    # 패키지 루트가 크레이트 폴더 자체인 꼴([lib] path = "lib.rs")이면 이것들이 패키지 루트 안에 놓인다
+    def allowed_outside_modules(self, path: Path, package_root: Path, scope_dir: Path) -> bool:
+        crate = package_root if (package_root / "Cargo.toml").is_file() else package_root.parent
+        bases = [package_root, crate / "src"]
+        if path in [b / "main.rs" for b in bases] + [crate / "build.rs"]:
+            return True
+        dirs = [b / "bin" for b in bases] + [crate / d for d in ("tests", "examples", "benches", "target")]
+        return any(path == d or d in path.parents for d in dirs)
 
     def surface_path(self, folder: Path, kind: str) -> Path:
         return SurfaceRenderer.path(folder, kind)

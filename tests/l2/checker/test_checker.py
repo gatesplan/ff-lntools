@@ -111,3 +111,33 @@ def test_c5_absolute_import_reported_once_at_innermost(layout: ProjectLayout):
     store.write_text("from shop.l1.order import Order\n\n\nclass Store:\n    pass\n", encoding="utf-8")
     got = [v for v in _rescan(layout).run() if v.code == "C5"]
     assert sorted((v.module, v.line) for v in got) == [("l3.intruder", 1), ("l3.portfolio.l1.store", 1)]
+
+
+# 층 폴더에 바로 놓인 파일은 C7. 그 파일의 import 는 어느 검사도 받지 않으므로 위 층을 가리켜도 C1 이 없다
+def test_c7_file_directly_in_layer_folder(layout: ProjectLayout):
+    (layout.package_root / "l1/stray.py").write_text("from ..l4.app import App\n", encoding="utf-8")
+    got = [v for v in _rescan(layout).run() if v.module == ""]
+    assert [(v.code, v.file.name) for v in got] == [("C7", "stray.py")]
+    assert "l1/stray/stray.py" in got[0].message
+
+
+# 패키지 루트와 중첩 모듈 폴더 바로 아래의 __main__.py 는 모듈 밖에 있어도 된다.
+# 층 폴더의 __main__.py 와 층 밖 폴더의 파일은 C7. 층 밖 폴더의 파일은 옮길 자리 없이 알린다
+def test_c7_entry_scripts_allowed_and_other_files_reported(layout: ProjectLayout):
+    for rel in ["__main__.py", "l3/portfolio/__main__.py", "l1/__main__.py"]:
+        (layout.package_root / rel).write_text("import sys\n", encoding="utf-8")
+    (layout.package_root / "misc").mkdir()
+    (layout.package_root / "misc/helper.py").write_text("", encoding="utf-8")
+    got = [v for v in _rescan(layout).run() if v.code == "C7"]
+    rel = [(v.module, v.file.relative_to(layout.package_root).as_posix()) for v in got]
+    assert rel == [("", "l1/__main__.py"), ("", "misc/helper.py")]
+    assert got[1].message.endswith("모듈 폴더로 옮긴다")
+
+
+# 중첩 모듈 안에서 안쪽 모듈 밖에 놓인 파일은 그 중첩 모듈의 C7
+def test_c7_inside_nested_module_belongs_to_it(layout: ProjectLayout):
+    (layout.package_root / "l3/portfolio/helper.py").write_text("", encoding="utf-8")
+    (layout.package_root / "l3/portfolio/l1/loose.py").write_text("", encoding="utf-8")
+    got = [v for v in _rescan(layout).run(only={"l3.portfolio"}) if v.code == "C7"]
+    assert [(v.module, v.file.name) for v in got] == [("l3.portfolio", "helper.py"), ("l3.portfolio", "loose.py")]
+    assert "l3/portfolio/l1/loose/loose.py" in got[1].message

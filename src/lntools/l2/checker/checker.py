@@ -5,10 +5,12 @@ from ...l1.graph import Graph
 from ...l1.surface import Surface
 
 
-# C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로, C6 덧붙이기 위치 검사. 파싱에 실패한 파일은 E 로 먼저 알린다
+# C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로, C6 덧붙이기 위치, C7 모듈 밖 소스 검사. 파싱에 실패한 파일은 E 로 먼저 알린다
 # C2 는 넷: 표면을 지나 들어간 import, 표면에 없는 이름을 import, 같은 층에서 겹치는 공개 이름, 스코프 밖 이름을 다시 내보내기
 # C6: 덧붙이기(Rust 의 impl)는 타입의 모듈에, 트레이트 구현은 타입이나 트레이트의 모듈에 둔다.
 # 다른 곳에 두면 import 없이 그 코드를 부르게 되어 방향과 영향 범위가 보이지 않는다
+# C7: 모듈 폴더 밖 소스는 어느 모듈에도 속하지 않아 다른 검사를 모두 피한다. 모듈 밖에는 표면 파일과,
+# 언어가 정한 진입 스크립트와 다른 빌드 대상(Python 의 __main__.py, Rust 의 main.rs, bin/, tests/)만 둔다
 class Checker:
     def __init__(self, graph: Graph, surface: Surface):
         self.graph = graph
@@ -80,10 +82,38 @@ class Checker:
         for cyc in g.cycles():
             out.append(Violation("C4", cyc[0], self.surface.module_file(cyc[0]), 0,
                                  "모듈 간 순환: " + " -> ".join(cyc + [cyc[0]])))
+        out.extend(self._loose())
         if only is not None:
             out = [v for v in out if v.module in only]
-        order = {"E": -1, "C1": 0, "C2": 1, "C3": 2, "C4": 3, "C5": 4, "C6": 5}
+        order = {"E": -1, "C1": 0, "C2": 1, "C3": 2, "C4": 3, "C5": 4, "C6": 5, "C7": 6}
         return sorted(out, key=lambda v: (order[v.code], v.module, v.line))
+
+    # 단순 모듈 폴더에 들지 않은 소스 파일. 중첩 모듈 안에서 안쪽 모듈 밖에 놓인 파일은 그 중첩 모듈의 위반,
+    # 나머지는 패키지("")의 위반이다. 층 폴더에 바로 놓인 파일이면 옮길 자리를 같이 알린다
+    def _loose(self) -> list[Violation]:
+        root = self.surface.layout.package_root
+        lang = self.surface.language
+        simple = {m.path for m in self.graph.modules.values() if not m.is_nested}
+        nested = {m.path: m.name for m in self.graph.modules.values() if m.is_nested}
+        surfaces = self.surface.paths()
+        layers = set(self.surface.layer_dirs())
+        out: list[Violation] = []
+
+        # 단순 모듈 폴더와 모듈 밖에 있어도 되는 폴더(Rust 의 target/ 등)에는 들어가지 않는다
+        def walk(d: Path, scope_dir: Path, scope: str) -> None:
+            for c in sorted(d.iterdir()):
+                if c in simple or c in surfaces or lang.allowed_outside_modules(c, root, scope_dir):
+                    continue
+                if c.is_dir() and not c.is_symlink():
+                    inner = c in nested
+                    walk(c, c if inner else scope_dir, nested[c] if inner else scope)
+                elif c.suffix == lang.suffix:
+                    dest = f"({(d / c.stem / c.name).relative_to(root).as_posix()})" if d in layers else ""
+                    out.append(Violation("C7", scope, c, 0,
+                        f"모듈 폴더 밖 소스. 어느 모듈에도 속하지 않아 검사를 받지 않는다. 모듈 폴더{dest}로 옮긴다"))
+
+        walk(root, root, "")
+        return out
 
     # 메서드 덧붙이기는 타입의 모듈만. 트레이트 구현은 타입이나 트레이트의 모듈. 둘 다 패키지 밖이면 검사하지 않는다
     @staticmethod

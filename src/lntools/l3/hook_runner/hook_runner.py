@@ -71,9 +71,7 @@ class HookRunner:
         modules, edges = Scanner(layout, self.language).scan()
         graph = Graph(modules, edges)
         chain = graph.modules_of(file)
-        if not chain:
-            return 0
-        names = {m.name for m in chain}
+        names = {m.name for m in chain} or {""}   # 모듈 밖 파일은 패키지("")의 위반(C7)을 본다
         surface = Surface(layout, modules, self.language)
         violations = Checker(graph, surface).run(only=names)
         if violations:
@@ -83,6 +81,8 @@ class HookRunner:
             for h in self.language.hints({v.code for v in violations}):
                 sys.stderr.write(h + "\n")
             return 2
+        if not chain:
+            return 0
         inner = chain[-1]
         lines = [f"[lnt] {inner.name} (l{inner.layer}) 편집. 위반 없음."]
         blaster = Blaster(graph)
