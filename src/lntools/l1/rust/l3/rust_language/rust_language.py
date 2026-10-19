@@ -27,11 +27,13 @@ HINTS = {
     "C7": "C7 풀이: 파일을 층 폴더 아래 모듈 폴더로 옮기고 lnt doc 으로 mod 선언을 다시 만든다. 예: l1/stray.rs 는 l1/stray/stray.rs. "
           "층이 맞지 않으면 lnt check 의 C3 메시지대로 lnt move 한다. "
           "모듈 폴더 밖에 둘 수 있는 것은 표면 파일(lib.rs, mod.rs)과 Cargo 의 다른 대상(main.rs, bin/, tests/, examples/, benches/, build.rs)뿐이다",
+    "C8": "C8 풀이: #[macro_export] 를 지운다. 다른 모듈에서 써야 하면 매크로 뒤에 pub(crate) use 이름; 을 두고 모듈 경로로 가져다 쓴다. "
+          "먼저 함수, 제네릭, 트레이트로 되는지 본다",
 }
 
 
 # Rust 의 읽기(tree-sitter)와 쓰기(mod.rs, lib.rs, 경로 고치기)를 lnt 의 언어 약속에 맞춰 묶는다
-# 패키지 루트는 크레이트의 src. 경로 규칙(C5)과 매크로 규칙은 아직 정하지 않아 검사하지 않는다
+# 패키지 루트는 크레이트의 src. 경로 규칙(C5)은 두지 않는다(크레이트는 Cargo 의존으로 꽂아 crate:: 경로가 깨지지 않는다)
 class RustLanguage(Language):
     name = "rust"
     suffix = ".rs"
@@ -82,6 +84,9 @@ class RustLanguage(Language):
     def class_counts(self, module_dir: Path) -> list[tuple[str, int]]:
         return self._sig.class_counts(module_dir)
 
+    def exported_macros(self, module_dir: Path) -> list[tuple[Path, int]]:
+        return self._sig.exported_macros(module_dir)
+
     def outside_uses(self, project_root: Path, package_root: Path) -> list[tuple[str, list[str]]]:
         return self._reader(package_root).outside_uses(project_root)
 
@@ -106,7 +111,7 @@ class RustLanguage(Language):
                         old_name: str, new_name: str, exports: set[str]) -> bool:
         return UseRewriter(package_root).rewrite(file, module_dir, old_name, new_name, exports)
 
-    # 경로 규칙(C5)을 아직 정하지 않아 고칠 것이 없다
+    # 경로 규칙(C5)을 두지 않아 고칠 것이 없다
     def fix_absolute_imports(self, file: Path, package_root: Path) -> int:
         return 0
 

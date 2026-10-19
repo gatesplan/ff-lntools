@@ -32,7 +32,7 @@ tests/
   l1/order/test_order.py    # example. Test placement is not an ln rule
 ```
 
-Seven rules. C6 applies to Rust only.
+Eight rules. C6 and C8 apply to Rust only.
 
 | Code | Rule |
 |---|---|
@@ -40,9 +40,10 @@ Seven rules. C6 applies to Rust only.
 | C2 | Import only names on a **surface**: a module (`shop.l1.order`) or a layer (`shop.l1`). Never reach into a module's files or a nested module's internals, never import a name the surface does not publish, and no two modules in one layer may publish the same name |
 | C3 | A module's layer = max(layer of its dependencies) + 1. No dependencies means l0. Any third-party package means at least l1 |
 | C4 | No cycles between modules |
-| C5 | Imports inside the package are **relative** (`from ...l1.order import Order`), so the package still works when nested inside another project (not checked for Rust yet) |
+| C5 | Imports inside the package are **relative** (`from ...l1.order import Order`), so the package still works when nested inside another project (not applied to Rust: a crate is plugged in as a Cargo dependency, so `crate::` paths do not break) |
 | C6 | Rust: an `impl` lives in the module of its type or trait. Attached elsewhere, its code runs without any import showing it |
 | C7 | Every source file lives in a module folder. Only surface files and entry scripts (`__main__.py`; for Rust, Cargo's other targets such as `main.rs`, `bin/`, `tests/`) sit outside. A file outside every module escapes all other checks |
+| C8 | Rust: no `#[macro_export]`. An exported macro lands at the crate root, skips the surfaces, and hides the dependency at the call site. Share a macro between modules with `pub(crate) use` and a module path |
 
 Why.
 
@@ -64,7 +65,7 @@ is checked and violations come back as errors.
 | Command | Role |
 |---|---|
 | `lnt init` | Install protocol docs, `CLAUDE.md` and Claude Code hooks into a project |
-| `lnt check` | C1-C7, plus files that fail to parse. Exit 1 on violation. `--fix` first rewrites absolute imports inside the package (C5) to relative ones |
+| `lnt check` | C1-C8, plus files that fail to parse. Exit 1 on violation. `--fix` first rewrites absolute imports inside the package (C5) to relative ones |
 | `lnt blast MODULE` | Modules affected when this one changes, including consumers through inherited interfaces |
 | `lnt map [--json]` | Modules, layers, dependencies at a glance. `--json` emits modules, edges, violations and orphans for tools that draw the map, one map per package under `src/` |
 | `lnt sig [TARGET]` | Public signatures of a layer or module, computed on the spot (not stored) |

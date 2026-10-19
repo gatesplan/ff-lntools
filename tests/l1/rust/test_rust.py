@@ -64,8 +64,8 @@ def test_protocol_doc_is_packaged():
 
 # 출력은 ASCII 와 한글만 (훅 경로 규칙). C5 는 Rust 에서 검사하지 않아 풀이가 없고, 고칠 것도 없다
 def test_hints():
-    hints = LANG.hints({"E", "C1", "C2", "C3", "C4", "C5", "C6", "C7"})
-    assert [h.split(" ", 1)[0] for h in hints] == ["E", "C1", "C2", "C3", "C4", "C6", "C7"]
+    hints = LANG.hints({"E", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"})
+    assert [h.split(" ", 1)[0] for h in hints] == ["E", "C1", "C2", "C3", "C4", "C6", "C7", "C8"]
     for h in hints:
         assert all(ord(ch) < 128 or "가" <= ch <= "힣" for ch in h)
     assert LANG.fix_absolute_imports(Path("x.rs"), Path(".")) == 0
@@ -127,6 +127,16 @@ MUTATIONS = {
                               "    fn on_tick(&mut self, p: &mut dyn OrderPlacer, c: &Candle) { (**self).on_tick(p, c) }\n}\n",
                               True, []),
     "테스트 안 덧붙이기는 보지 않는다": ("src/l2/engine/engine.rs", "#[cfg(test)]\nimpl crate::l0::candle::Candle {}\n", True, []),
+    "매크로 정의 안 경로도 의존": ("src/l0/candle/candle.rs", "macro_rules! up { () => { crate::l3::app::App::new() }; }\n", True,
+                          [("C1", "l0.candle"), ("C3", "l0.candle"), ("C4", "l0.candle")]),
+    "매크로 정의 안 $crate 경로도 의존": ("src/l0/candle/candle.rs", "macro_rules! up { ($x:expr) => { $crate::l3::app::App::run($x) }; }\n", True,
+                                 [("C1", "l0.candle"), ("C3", "l0.candle"), ("C4", "l0.candle")]),
+    "매크로 패턴 쪽은 경로가 아니다": ("src/l0/candle/candle.rs", "macro_rules! up { (crate::l3::app) => { 1 }; }\n", True, []),
+    "크레이트 밖으로 내보낸 매크로": ("src/l0/candle/candle.rs", "#[macro_export]\nmacro_rules! up { () => { 1 }; }\n", True, [("C8", "l0.candle")]),
+    "인라인 mod 안에서 내보낸 매크로": ("src/l0/candle/candle.rs", "mod inner {\n    #[macro_export]\n    macro_rules! up { () => { 1 }; }\n}\n", True,
+                              [("C8", "l0.candle")]),
+    "모듈 경로로 나눠 쓰는 매크로는 된다": ("src/l0/candle/candle.rs", "macro_rules! up { () => { 1 }; }\npub(crate) use up;\n", True, []),
+    "테스트 안 매크로 내보내기는 보지 않는다": ("src/l0/candle/candle.rs", "#[cfg(test)]\nmod t {\n    #[macro_export]\n    macro_rules! up { () => { 1 }; }\n}\n", True, []),
     "층 폴더에 바로 둔 파일": ("src/l1/stray.rs", "pub struct Stray;\n", False, [("C7", "")]),
     "중첩 모듈 안 모듈 밖 파일": ("src/l1/book/helper.rs", "pub struct Helper;\n", False, [("C7", "l1.book")]),
     "실행 파일은 모듈 밖에 둔다": ("src/bin/tool.rs", "fn main() {}\n", False, []),

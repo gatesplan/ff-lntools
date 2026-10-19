@@ -64,6 +64,26 @@ class SignatureExtractor:
                     out.append(RawReexport(name, target, "::".join(segs), f, item.start_point[0] + 1))
         return out
 
+    # 모듈 폴더 안 파일(하위 폴더와 인라인 mod 포함, 표면과 테스트 파일 제외)에서 크레이트 밖으로 내보낸 매크로(#[macro_export])
+    # 반환: [(파일, 줄)]. #[cfg(test)] 안은 뺀다
+    def exported_macros(self, module_dir: Path) -> list[tuple[Path, int]]:
+        out: list[tuple[Path, int]] = []
+        for f in self._source_files(module_dir):
+            root = self._parse(f)
+            if root is not None:
+                out.extend((f, line) for line in self._macro_exports(root))
+        return out
+
+    @classmethod
+    def _macro_exports(cls, container: SyntaxNode) -> list[int]:
+        out: list[int] = []
+        for item, attrs in SourceParser.items_with_attributes(container):
+            if item.type == "macro_definition" and any("macro_export" in SourceParser.text(a) for a in attrs):
+                out.append(item.start_point[0] + 1)
+            elif item.type == "mod_item" and (body := item.child_by_field_name("body")) is not None:
+                out.extend(cls._macro_exports(body))
+        return out
+
     # 모듈 폴더 안 파일(하위 폴더 포함, 표면 파일 제외)의 최상위에 정의된 모든 이름
     def defined_names(self, module_dir: Path) -> set[str]:
         out: set[str] = set()

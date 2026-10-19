@@ -5,12 +5,15 @@ from ...l1.graph import Graph
 from ...l1.surface import Surface
 
 
-# C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로, C6 덧붙이기 위치, C7 모듈 밖 소스 검사. 파싱에 실패한 파일은 E 로 먼저 알린다
+# C1 방향, C2 표면, C3 층 일치, C4 순환, C5 상대 경로, C6 덧붙이기 위치, C7 모듈 밖 소스, C8 매크로 내보내기 검사
+# 파싱에 실패한 파일은 E 로 먼저 알린다
 # C2 는 넷: 표면을 지나 들어간 import, 표면에 없는 이름을 import, 같은 층에서 겹치는 공개 이름, 스코프 밖 이름을 다시 내보내기
 # C6: 덧붙이기(Rust 의 impl)는 타입의 모듈에, 트레이트 구현은 타입이나 트레이트의 모듈에 둔다.
 # 다른 곳에 두면 import 없이 그 코드를 부르게 되어 방향과 영향 범위가 보이지 않는다
 # C7: 모듈 폴더 밖 소스는 어느 모듈에도 속하지 않아 다른 검사를 모두 피한다. 모듈 밖에는 표면 파일과,
 # 언어가 정한 진입 스크립트와 다른 빌드 대상(Python 의 __main__.py, Rust 의 main.rs, bin/, tests/)만 둔다
+# C8: 크레이트 밖으로 내보낸 매크로(Rust 의 #[macro_export])는 크레이트 루트로 나가 표면을 건너뛰고,
+# 부르는 쪽에서 생기는 의존이 경로에 드러나지 않는다
 class Checker:
     def __init__(self, graph: Graph, surface: Surface):
         self.graph = graph
@@ -83,9 +86,15 @@ class Checker:
             out.append(Violation("C4", cyc[0], self.surface.module_file(cyc[0]), 0,
                                  "모듈 간 순환: " + " -> ".join(cyc + [cyc[0]])))
         out.extend(self._loose())
+        for name, m in sorted(g.modules.items()):
+            if m.is_nested:
+                continue
+            for f, line in self.surface.language.exported_macros(m.path):
+                out.append(Violation("C8", name, f, line,
+                    "크레이트 밖으로 내보낸 매크로(#[macro_export]). 크레이트 루트로 나가 표면을 건너뛰고, 부르는 쪽의 의존이 보이지 않는다"))
         if only is not None:
             out = [v for v in out if v.module in only]
-        order = {"E": -1, "C1": 0, "C2": 1, "C3": 2, "C4": 3, "C5": 4, "C6": 5, "C7": 6}
+        order = {"E": -1, "C1": 0, "C2": 1, "C3": 2, "C4": 3, "C5": 4, "C6": 5, "C7": 6, "C8": 7}
         return sorted(out, key=lambda v: (order[v.code], v.module, v.line))
 
     # 단순 모듈 폴더에 들지 않은 소스 파일. 중첩 모듈 안에서 안쪽 모듈 밖에 놓인 파일은 그 중첩 모듈의 위반,

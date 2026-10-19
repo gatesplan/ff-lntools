@@ -62,6 +62,10 @@ class Language(ABC):
     @abstractmethod
     def class_counts(self, module_dir: Path) -> list[tuple[str, int]]: ...
 
+    # 모듈 폴더 안에서 크레이트 밖으로 내보낸 매크로(Rust 의 #[macro_export]). [(파일, 줄)]. 그런 문법이 없는 언어는 빈 목록
+    @abstractmethod
+    def exported_macros(self, module_dir: Path) -> list[tuple[Path, int]]: ...
+
     # 패키지 밖 코드(스크립트, 진입점 설정)가 패키지에서 가져오는 것. (절대 점 경로, 가져온 이름들)
     @abstractmethod
     def outside_uses(self, project_root: Path, package_root: Path) -> list[tuple[str, list[str]]]: ...
@@ -99,6 +103,6 @@ class Language(ABC):
 
     # ---- 안내 ----
 
-    # 위반 종류마다 해결 방법 한 줄. E, C1~C7 순서
+    # 위반 종류마다 해결 방법 한 줄. E, C1~C8 순서
     @abstractmethod
     def hints(self, codes: set[str]) -> list[str]: ...

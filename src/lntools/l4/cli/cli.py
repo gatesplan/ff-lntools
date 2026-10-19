@@ -53,7 +53,7 @@ class Cli:
         p.add_argument("--root", default=".", help="프로젝트 안의 아무 경로. 기본: 현재 디렉토리")
         sub = p.add_subparsers(dest="cmd", required=True)
 
-        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환, 덧붙이기 위치, 모듈 밖 소스 검사. 문법 오류 파일도 알린다")
+        c = sub.add_parser("check", help="층 방향, 표면 import, 층 일치, 순환, 덧붙이기 위치, 모듈 밖 소스, 매크로 내보내기 검사. 문법 오류 파일도 알린다")
         c.add_argument("--file", help="이 파일을 포함하는 모듈의 위반만. 모듈 밖 파일이면 모듈 밖 소스 위반만")
         c.add_argument("--fix", action="store_true", help="기계로 고칠 수 있는 위반(C5 절대 import)을 고친 뒤 검사")
 

@@ -75,6 +75,10 @@ class PythonLanguage(Language):
     def class_counts(self, module_dir: Path) -> list[tuple[str, int]]:
         return self._sig.class_counts(module_dir)
 
+    # Python 에는 매크로가 없다
+    def exported_macros(self, module_dir: Path) -> list[tuple[Path, int]]:
+        return []
+
     def outside_uses(self, project_root: Path, package_root: Path) -> list[tuple[str, list[str]]]:
         return ImportReader(package_root).outside_uses(project_root)
 

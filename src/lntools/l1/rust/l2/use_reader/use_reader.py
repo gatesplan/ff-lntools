@@ -79,9 +79,14 @@ class UseReader:
                 self._impl(item, scope, imports, impls)
             self._walk(item, scope, imports)
 
-    # 노드 아래의 경로들. 함수 안 use 와 속성(#[derive(thiserror::Error)]) 안의 경로도 센다. 매크로 정의와 #[cfg(test)] 항목은 건너뛴다
+    # 노드 아래의 경로들. 함수 안 use 와 속성(#[derive(thiserror::Error)]) 안의 경로도 센다. #[cfg(test)] 항목은 건너뛴다
+    # 매크로 정의는 펼칠 코드(규칙의 오른쪽)의 경로만 센다. 그 경로는 매크로를 정의한 모듈의 의존이 된다
     def _walk(self, node: SyntaxNode, scope: tuple, imports: list[RawImport]) -> None:
         if node.type == "macro_definition":
+            for rule in node.named_children:
+                body = rule.child_by_field_name("right") if rule.type == "macro_rule" else None
+                if body is not None:
+                    self._tokens(body, scope, imports)
             return
         if node.type == "use_declaration":
             self._use(node, scope, imports)
@@ -121,8 +126,8 @@ class UseReader:
             imports.append(RawImport(None, [], "runtime", line, external=True))
         return None
 
-    # 매크로 인자와 속성 인자 안의 경로. crate::, super::, self:: 로 시작하거나 Cargo.toml 의존 이름으로 시작하는 것만 본다
-    # 인자는 펼치기 전까지 코드가 아니라서 글자로 읽는다
+    # 매크로 인자, 매크로 정의의 펼칠 코드, 속성 인자 안의 경로. crate::, $crate::, super::, self:: 로 시작하거나
+    # Cargo.toml 의존 이름으로 시작하는 것만 본다. 펼치기 전까지 코드가 아니라서 글자로 읽는다
     def _tokens(self, tree: SyntaxNode, scope: tuple, imports: list[RawImport]) -> None:
         toks = tree.children
         i = 0
@@ -132,10 +137,11 @@ class UseReader:
                 self._tokens(t, scope, imports)
                 i += 1
                 continue
-            rooted = t.type in ("crate", "super", "self") or (
+            dollar_crate = t.type == "metavariable" and SourceParser.text(t) == "$crate"
+            rooted = dollar_crate or t.type in ("crate", "super", "self") or (
                 t.type == "identifier" and self.paths.deps is not None and SourceParser.text(t) in self.paths.deps)
             if rooted and i + 1 < len(toks) and toks[i + 1].type == "::":
-                segs = [SourceParser.text(t)]
+                segs = ["crate" if dollar_crate else SourceParser.text(t)]
                 j = i + 1
                 while j + 1 < len(toks) and toks[j].type == "::" and toks[j + 1].type in ("identifier", "super", "self"):
                     segs.append(SourceParser.text(toks[j + 1]))
